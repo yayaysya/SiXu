@@ -1,8 +1,9 @@
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import NotebookLLMPlugin from './main';
-import { NotebookLLMSettings, PromptTemplate } from './types';
-import { validateApiKey } from './api/zhipu';
+import { NotebookLLMSettings, PromptTemplate, AIProvider } from './types';
+import { validateProviderApiKey } from './api/unified';
 import { BUILTIN_TEMPLATES, getAllTemplates } from './prompts/templates';
+import { getTextModels, getVisionModels, getProviderDisplayName } from './api/factory';
 
 /**
  * 设置面板
@@ -21,11 +22,11 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 
 		containerEl.createEl('h2', { text: 'Notebook LLM 设置' });
 
-		// API 设置
-		this.displayApiSettings(containerEl);
+		// 文本模型配置（包含内联的 API 配置）
+		this.displayTextModelSettings(containerEl);
 
-		// 模型设置
-		this.displayModelSettings(containerEl);
+		// 视觉模型配置（包含内联的 API 配置）
+		this.displayVisionModelSettings(containerEl);
 
 		// 处理设置
 		this.displayProcessSettings(containerEl);
@@ -38,90 +39,338 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * API 设置
+	 * 文本模型配置
 	 */
-	private displayApiSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h3', { text: 'API 设置' });
+	private displayTextModelSettings(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: '文本模型配置' });
 
-		// API Key
+		const currentProvider = this.plugin.settings.textProvider;
+		const providerConfig = this.plugin.settings.providers[currentProvider];
+
+		// 1. 文本 AI 服务
 		new Setting(containerEl)
-			.setName('智谱 AI API Key')
-			.setDesc('在智谱AI开放平台获取: https://open.bigmodel.cn/')
+			.setName('文本 AI 服务')
+			.setDesc('选择用于文本生成和总结的 AI 服务提供商')
+			.addDropdown(dropdown => {
+				dropdown
+					.addOption(AIProvider.ZHIPU, getProviderDisplayName(AIProvider.ZHIPU))
+					.addOption(AIProvider.OPENAI, getProviderDisplayName(AIProvider.OPENAI))
+					.addOption(AIProvider.DEEPSEEK, getProviderDisplayName(AIProvider.DEEPSEEK))
+					.addOption(AIProvider.GEMINI, getProviderDisplayName(AIProvider.GEMINI))
+					.setValue(currentProvider)
+					.onChange(async (value: AIProvider) => {
+						this.plugin.settings.textProvider = value;
+						// 自动选择该厂商的第一个模型
+						const models = getTextModels(value);
+						if (models.length > 0) {
+							this.plugin.settings.textModel = models[0];
+						}
+						await this.plugin.saveSettings();
+						this.display(); // 重新渲染以显示新厂商的配置
+					});
+			});
+
+		// 2. 文本模型
+		const textModels = getTextModels(currentProvider);
+		const isCustomModel = !textModels.includes(this.plugin.settings.textModel);
+
+		if (isCustomModel) {
+			// 自定义模式：显示下拉框 + 文本输入框
+			new Setting(containerEl)
+				.setName('文本模型')
+				.setDesc('选择模型或输入自定义模型名称')
+				.addDropdown(dropdown => {
+					textModels.forEach(model => {
+						dropdown.addOption(model, model);
+					});
+					dropdown.addOption('custom', '自定义...');
+					dropdown.setValue('custom');
+
+					dropdown.onChange(async (value) => {
+						if (value !== 'custom') {
+							this.plugin.settings.textModel = value;
+							await this.plugin.saveSettings();
+							this.display(); // 切换到标准模式
+						}
+					});
+				})
+				.addText(text => text
+					.setPlaceholder('输入模型名称')
+					.setValue(this.plugin.settings.textModel)
+					.onChange(async (value) => {
+						this.plugin.settings.textModel = value;
+						await this.plugin.saveSettings();
+					}));
+		} else {
+			// 标准模式：只显示下拉框（向右对齐）
+			new Setting(containerEl)
+				.setName('文本模型')
+				.setDesc('选择模型或输入自定义模型名称')
+				.addDropdown(dropdown => {
+					textModels.forEach(model => {
+						dropdown.addOption(model, model);
+					});
+					dropdown.addOption('custom', '自定义...');
+					dropdown.setValue(this.plugin.settings.textModel);
+
+					dropdown.onChange(async (value) => {
+						if (value === 'custom') {
+							this.plugin.settings.textModel = ''; // 清空以进入自定义模式
+							this.display(); // 切换到自定义模式
+						} else {
+							this.plugin.settings.textModel = value;
+							await this.plugin.saveSettings();
+						}
+					});
+				});
+		}
+
+		// 3. API 密钥（带文档链接）
+		const docUrls = {
+			[AIProvider.ZHIPU]: 'https://open.bigmodel.cn/',
+			[AIProvider.OPENAI]: 'https://platform.openai.com/',
+			[AIProvider.DEEPSEEK]: 'https://platform.deepseek.com/',
+			[AIProvider.GEMINI]: 'https://ai.google.dev/'
+		};
+
+		new Setting(containerEl)
+			.setName('API 密钥')
+			.setDesc(`请输入您的 ${getProviderDisplayName(currentProvider)} API Key`)
 			.addText(text => text
-				.setPlaceholder('输入你的 API Key')
-				.setValue(this.plugin.settings.apiKey)
+				.setPlaceholder('输入 API Key')
+				.setValue(providerConfig.apiKey)
 				.onChange(async (value) => {
-					this.plugin.settings.apiKey = value;
+					providerConfig.apiKey = value;
 					await this.plugin.saveSettings();
 				}))
 			.addButton(button => button
 				.setButtonText('验证')
 				.onClick(async () => {
+					if (!providerConfig.apiKey) {
+						new Notice('请先输入 API Key');
+						return;
+					}
+
 					const notice = new Notice('正在验证 API Key...', 0);
 					try {
-						const isValid = await validateApiKey(
-							this.plugin.settings.apiKey,
-							this.plugin.settings.apiBaseUrl
+						const isValid = await validateProviderApiKey(
+							currentProvider,
+							providerConfig.apiKey,
+							providerConfig.baseUrl,
+							this.plugin.settings.textModel
 						);
 
 						notice.hide();
 						if (isValid) {
-							new Notice('✅ API Key 验证成功!');
+							new Notice(`✅ ${getProviderDisplayName(currentProvider)} API Key 验证成功!`);
 						} else {
-							new Notice('❌ API Key 验证失败,请检查是否正确');
+							new Notice(`❌ API Key 验证失败，请检查是否正确`);
 						}
 					} catch (error) {
 						notice.hide();
-						new Notice('❌ 验证失败: ' + error.message);
+						new Notice(`❌ 验证失败: ${error.message}`);
 					}
 				}));
 
-		// API Base URL (高级选项)
-		new Setting(containerEl)
-			.setName('API Base URL')
-			.setDesc('默认即可,除非使用代理')
-			.addText(text => text
-				.setPlaceholder('https://open.bigmodel.cn/api/paas/v4')
-				.setValue(this.plugin.settings.apiBaseUrl)
-				.onChange(async (value) => {
-					this.plugin.settings.apiBaseUrl = value || 'https://open.bigmodel.cn/api/paas/v4';
-					await this.plugin.saveSettings();
-				}));
+		// 添加文档链接提示
+		const docLinkDesc = containerEl.createDiv({ cls: 'setting-item-description' });
+		docLinkDesc.style.marginTop = '-10px';
+		docLinkDesc.style.marginBottom = '10px';
+		docLinkDesc.innerHTML = `获取 API Key: <a href="${docUrls[currentProvider]}" target="_blank">${docUrls[currentProvider]}</a>`;
+
+		// 4. 高级选项 - 服务地址（可折叠）
+		this.createAdvancedUrlSetting(containerEl, currentProvider, 'text');
 	}
 
 	/**
-	 * 模型设置
+	 * 视觉模型配置
 	 */
-	private displayModelSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h3', { text: '模型设置' });
+	private displayVisionModelSettings(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: '视觉模型配置' });
 
-		// 文本生成模型
+		const currentProvider = this.plugin.settings.visionProvider;
+		const providerConfig = this.plugin.settings.providers[currentProvider];
+
+		// 1. 视觉 AI 服务
 		new Setting(containerEl)
-			.setName('文本生成模型')
-			.setDesc('用于生成文章和总结网页内容')
-			.addDropdown(dropdown => dropdown
-				.addOption('glm-4.6', 'GLM-4.6 - 最新高质量模型 (默认推荐)')
-				.addOption('glm-4.5', 'GLM-4.5 - 高质量平衡模型')
-				.addOption('glm-4.5-air', 'GLM-4.5-Air - 轻量快速版')
-				.addOption('glm-4.5-flash', 'GLM-4.5-Flash - 超快速版')
-				.addOption('glm-4-plus', 'GLM-4-Plus - 增强版')
-				.addOption('glm-4-flash', 'GLM-4-Flash - 快速版')
-				.setValue(this.plugin.settings.textModel)
+			.setName('视觉理解 AI 服务')
+			.setDesc('选择用于图片识别的 AI 服务提供商')
+			.addDropdown(dropdown => {
+				dropdown
+					.addOption(AIProvider.ZHIPU, getProviderDisplayName(AIProvider.ZHIPU))
+					.addOption(AIProvider.OPENAI, getProviderDisplayName(AIProvider.OPENAI))
+					.addOption(AIProvider.DEEPSEEK, getProviderDisplayName(AIProvider.DEEPSEEK))
+					.addOption(AIProvider.GEMINI, getProviderDisplayName(AIProvider.GEMINI))
+					.setValue(currentProvider)
+					.onChange(async (value: AIProvider) => {
+						this.plugin.settings.visionProvider = value;
+						// 自动选择该厂商的第一个模型
+						const models = getVisionModels(value);
+						if (models.length > 0) {
+							this.plugin.settings.visionModel = models[0];
+						}
+						await this.plugin.saveSettings();
+						this.display(); // 重新渲染以显示新厂商的配置
+					});
+			});
+
+		// 2. 视觉模型
+		const visionModels = getVisionModels(currentProvider);
+		const isCustomVisionModel = !visionModels.includes(this.plugin.settings.visionModel);
+
+		if (isCustomVisionModel) {
+			// 自定义模式：显示下拉框 + 文本输入框
+			new Setting(containerEl)
+				.setName('视觉模型')
+				.setDesc('选择模型或输入自定义模型名称')
+				.addDropdown(dropdown => {
+					visionModels.forEach(model => {
+						dropdown.addOption(model, model);
+					});
+					dropdown.addOption('custom', '自定义...');
+					dropdown.setValue('custom');
+
+					dropdown.onChange(async (value) => {
+						if (value !== 'custom') {
+							this.plugin.settings.visionModel = value;
+							await this.plugin.saveSettings();
+							this.display(); // 切换到标准模式
+						}
+					});
+				})
+				.addText(text => text
+					.setPlaceholder('输入模型名称')
+					.setValue(this.plugin.settings.visionModel)
+					.onChange(async (value) => {
+						this.plugin.settings.visionModel = value;
+						await this.plugin.saveSettings();
+					}));
+		} else {
+			// 标准模式：只显示下拉框（向右对齐）
+			new Setting(containerEl)
+				.setName('视觉模型')
+				.setDesc('选择模型或输入自定义模型名称')
+				.addDropdown(dropdown => {
+					visionModels.forEach(model => {
+						dropdown.addOption(model, model);
+					});
+					dropdown.addOption('custom', '自定义...');
+					dropdown.setValue(this.plugin.settings.visionModel);
+
+					dropdown.onChange(async (value) => {
+						if (value === 'custom') {
+							this.plugin.settings.visionModel = ''; // 清空以进入自定义模式
+							this.display(); // 切换到自定义模式
+						} else {
+							this.plugin.settings.visionModel = value;
+							await this.plugin.saveSettings();
+						}
+					});
+				});
+		}
+
+		// 3. API 密钥（带文档链接）
+		const docUrls = {
+			[AIProvider.ZHIPU]: 'https://open.bigmodel.cn/',
+			[AIProvider.OPENAI]: 'https://platform.openai.com/',
+			[AIProvider.DEEPSEEK]: 'https://platform.deepseek.com/',
+			[AIProvider.GEMINI]: 'https://ai.google.dev/'
+		};
+
+		new Setting(containerEl)
+			.setName('API 密钥')
+			.setDesc(`请输入您的 ${getProviderDisplayName(currentProvider)} API Key`)
+			.addText(text => text
+				.setPlaceholder('输入 API Key')
+				.setValue(providerConfig.apiKey)
 				.onChange(async (value) => {
-					this.plugin.settings.textModel = value;
+					providerConfig.apiKey = value;
 					await this.plugin.saveSettings();
+				}))
+			.addButton(button => button
+				.setButtonText('验证')
+				.onClick(async () => {
+					if (!providerConfig.apiKey) {
+						new Notice('请先输入 API Key');
+						return;
+					}
+
+					const notice = new Notice('正在验证 API Key...', 0);
+					try {
+						const isValid = await validateProviderApiKey(
+							currentProvider,
+							providerConfig.apiKey,
+							providerConfig.baseUrl,
+							this.plugin.settings.visionModel
+						);
+
+						notice.hide();
+						if (isValid) {
+							new Notice(`✅ ${getProviderDisplayName(currentProvider)} API Key 验证成功!`);
+						} else {
+							new Notice(`❌ API Key 验证失败，请检查是否正确`);
+						}
+					} catch (error) {
+						notice.hide();
+						new Notice(`❌ 验证失败: ${error.message}`);
+					}
 				}));
 
-		// 视觉识别模型
-		new Setting(containerEl)
-			.setName('视觉识别模型')
-			.setDesc('用于识别图片内容')
-			.addDropdown(dropdown => dropdown
-				.addOption('glm-4.5v', 'GLM-4.5V - 最新视觉模型 (推荐)')
-				.addOption('glm-4v-plus', 'GLM-4V-Plus - 增强版')
-				.setValue(this.plugin.settings.visionModel)
+		// 添加文档链接提示
+		const docLinkDesc = containerEl.createDiv({ cls: 'setting-item-description' });
+		docLinkDesc.style.marginTop = '-10px';
+		docLinkDesc.style.marginBottom = '10px';
+		docLinkDesc.innerHTML = `获取 API Key: <a href="${docUrls[currentProvider]}" target="_blank">${docUrls[currentProvider]}</a>`;
+
+		// 4. 高级选项 - 服务地址（可折叠）
+		this.createAdvancedUrlSetting(containerEl, currentProvider, 'vision');
+	}
+
+	/**
+	 * 创建高级选项 - 服务地址（可折叠）
+	 */
+	private createAdvancedUrlSetting(
+		containerEl: HTMLElement,
+		provider: AIProvider,
+		type: 'text' | 'vision'
+	): void {
+		const providerConfig = this.plugin.settings.providers[provider];
+
+		// 默认 URL 映射
+		const defaultUrls = {
+			[AIProvider.ZHIPU]: 'https://open.bigmodel.cn/api/paas/v4',
+			[AIProvider.OPENAI]: 'https://api.openai.com/v1',
+			[AIProvider.DEEPSEEK]: 'https://api.deepseek.com/v1',
+			[AIProvider.GEMINI]: 'https://generativelanguage.googleapis.com/v1beta/openai'
+		};
+
+		// 创建高级选项容器（默认折叠）
+		const advancedContainer = containerEl.createDiv({ cls: 'setting-item-advanced' });
+		advancedContainer.style.display = 'none';
+
+		// 高级选项切换按钮
+		const toggleSetting = new Setting(containerEl)
+			.setName('高级选项')
+			.setDesc('配置自定义服务地址（代理或私有部署）')
+			.addButton(button => {
+				button
+					.setButtonText('展开 ▼')
+					.onClick(() => {
+						const isHidden = advancedContainer.style.display === 'none';
+						advancedContainer.style.display = isHidden ? 'block' : 'none';
+						button.setButtonText(isHidden ? '收起 ▲' : '展开 ▼');
+					});
+			});
+
+		// 服务地址配置（在折叠容器内）
+		new Setting(advancedContainer)
+			.setName('服务地址')
+			.setDesc(`默认: ${defaultUrls[provider]}`)
+			.addText(text => text
+				.setPlaceholder(defaultUrls[provider])
+				.setValue(providerConfig.baseUrl)
 				.onChange(async (value) => {
-					this.plugin.settings.visionModel = value;
+					providerConfig.baseUrl = value || defaultUrls[provider];
 					await this.plugin.saveSettings();
 				}));
 	}

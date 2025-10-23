@@ -1,11 +1,42 @@
 /**
+ * AI 厂商枚举
+ */
+export enum AIProvider {
+	ZHIPU = 'zhipu',
+	OPENAI = 'openai',
+	DEEPSEEK = 'deepseek',
+	GEMINI = 'gemini'
+}
+
+/**
+ * 厂商配置
+ */
+export interface ProviderSettings {
+	apiKey: string;
+	baseUrl: string;
+}
+
+/**
  * 插件设置接口
  */
 export interface NotebookLLMSettings {
-	apiKey: string;
-	apiBaseUrl: string;
+	// 文本模型配置
+	textProvider: AIProvider;
 	textModel: string;
+
+	// 视觉模型配置
+	visionProvider: AIProvider;
 	visionModel: string;
+
+	// 各厂商 API 配置
+	providers: {
+		[AIProvider.ZHIPU]: ProviderSettings;
+		[AIProvider.OPENAI]: ProviderSettings;
+		[AIProvider.DEEPSEEK]: ProviderSettings;
+		[AIProvider.GEMINI]: ProviderSettings;
+	};
+
+	// 其他配置
 	concurrency: number;
 	outputFileNameTemplate: string;
 	selectedPromptTemplate: string;
@@ -16,10 +47,31 @@ export interface NotebookLLMSettings {
  * 默认设置
  */
 export const DEFAULT_SETTINGS: NotebookLLMSettings = {
-	apiKey: '',
-	apiBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+	textProvider: AIProvider.ZHIPU,
 	textModel: 'glm-4.6',
+
+	visionProvider: AIProvider.ZHIPU,
 	visionModel: 'glm-4.5v',
+
+	providers: {
+		[AIProvider.ZHIPU]: {
+			apiKey: '',
+			baseUrl: 'https://open.bigmodel.cn/api/paas/v4'
+		},
+		[AIProvider.OPENAI]: {
+			apiKey: '',
+			baseUrl: 'https://api.openai.com/v1'
+		},
+		[AIProvider.DEEPSEEK]: {
+			apiKey: '',
+			baseUrl: 'https://api.deepseek.com/v1'
+		},
+		[AIProvider.GEMINI]: {
+			apiKey: '',
+			baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai'
+		}
+	},
+
 	concurrency: 5,
 	outputFileNameTemplate: '{name}_AI整理',
 	selectedPromptTemplate: 'default',

@@ -1,7 +1,7 @@
 import { App, Plugin, TFile, Notice, MarkdownView } from 'obsidian';
 import { NotebookLLMSettings, DEFAULT_SETTINGS, TaskStatus } from './types';
 import { NotebookLLMSettingTab } from './settings';
-import { ZhipuAI } from './api/zhipu';
+import { createTextProvider, createVisionProvider } from './api/factory';
 import { MarkdownParser } from './parsers/markdown';
 import { ImageProcessor } from './processors/image';
 import { LinkProcessor } from './processors/link';
@@ -85,8 +85,16 @@ export default class NotebookLLMPlugin extends Plugin {
 	 */
 	async organizeNote(file: TFile) {
 		// 验证 API Key
-		if (!this.settings.apiKey) {
-			new Notice('❌ 请先在设置中配置智谱 AI API Key');
+		const textProviderConfig = this.settings.providers[this.settings.textProvider];
+		const visionProviderConfig = this.settings.providers[this.settings.visionProvider];
+
+		if (!textProviderConfig.apiKey) {
+			new Notice(`❌ 请先在设置中配置 ${this.settings.textProvider} 的 API Key`);
+			return;
+		}
+
+		if (!visionProviderConfig.apiKey) {
+			new Notice(`❌ 请先在设置中配置 ${this.settings.visionProvider} 的 API Key`);
 			return;
 		}
 
@@ -125,11 +133,12 @@ export default class NotebookLLMPlugin extends Plugin {
 	private async processNoteInBackground(file: TFile, taskId: string, outputPath: string) {
 		try {
 			// 初始化 AI 和处理器
-			const zhipu = new ZhipuAI(this.settings.apiKey, this.settings.apiBaseUrl);
+			const textProvider = createTextProvider(this.settings);
+			const visionProvider = createVisionProvider(this.settings);
 			const parser = new MarkdownParser(this.app);
-			const imageProcessor = new ImageProcessor(zhipu, this.settings.visionModel);
-			const linkProcessor = new LinkProcessor(zhipu, this.settings.textModel);
-			const textProcessor = new TextProcessor(zhipu, this.settings.textModel);
+			const imageProcessor = new ImageProcessor(visionProvider, this.settings.visionModel);
+			const linkProcessor = new LinkProcessor(textProvider, this.settings.textModel);
+			const textProcessor = new TextProcessor(textProvider, this.settings.textModel);
 
 			// 1. 解析 Markdown
 			this.taskQueue.updateProgress(taskId, 10, TaskStatus.PARSING, '解析笔记内容中...');

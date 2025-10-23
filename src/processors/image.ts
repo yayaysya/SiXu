@@ -1,15 +1,15 @@
 import { ImageInfo } from '../types';
-import { ZhipuAI } from '../api/zhipu';
+import { UnifiedAIProvider } from '../api/unified';
 
 /**
  * 图片处理器
  */
 export class ImageProcessor {
-	private zhipu: ZhipuAI;
+	private provider: UnifiedAIProvider;
 	private visionModel?: string;
 
-	constructor(zhipu: ZhipuAI, visionModel?: string) {
-		this.zhipu = zhipu;
+	constructor(provider: UnifiedAIProvider, visionModel?: string) {
+		this.provider = provider;
 		this.visionModel = visionModel;
 	}
 
@@ -18,7 +18,7 @@ export class ImageProcessor {
 	 */
 	async processImage(image: ImageInfo): Promise<ImageInfo> {
 		try {
-			const description = await this.zhipu.recognizeImage(
+			const description = await this.provider.recognizeImage(
 				image.path,
 				'请简洁描述这张图片的内容,用一两句话概括关键信息。',
 				this.visionModel

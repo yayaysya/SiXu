@@ -1,16 +1,16 @@
 import { ImageInfo, LinkInfo, PromptTemplate, ParsedMarkdown } from '../types';
-import { ZhipuAI } from '../api/zhipu';
+import { UnifiedAIProvider } from '../api/unified';
 import { fillTemplate } from '../prompts/templates';
 
 /**
  * 文本整合处理器
  */
 export class TextProcessor {
-	private zhipu: ZhipuAI;
+	private provider: UnifiedAIProvider;
 	private textModel?: string;
 
-	constructor(zhipu: ZhipuAI, textModel?: string) {
-		this.zhipu = zhipu;
+	constructor(provider: UnifiedAIProvider, textModel?: string) {
+		this.provider = provider;
 		this.textModel = textModel;
 	}
 
@@ -60,7 +60,7 @@ export class TextProcessor {
 		);
 
 		// 调用 AI 生成文章
-		const article = await this.zhipu.generateText(
+		const article = await this.provider.generateText(
 			prompts.system,
 			prompts.user,
 			{

@@ -1,15 +1,15 @@
 import { LinkInfo } from '../types';
-import { ZhipuAI } from '../api/zhipu';
+import { UnifiedAIProvider } from '../api/unified';
 
 /**
  * 链接处理器
  */
 export class LinkProcessor {
-	private zhipu: ZhipuAI;
+	private provider: UnifiedAIProvider;
 	private textModel?: string;
 
-	constructor(zhipu: ZhipuAI, textModel?: string) {
-		this.zhipu = zhipu;
+	constructor(provider: UnifiedAIProvider, textModel?: string) {
+		this.provider = provider;
 		this.textModel = textModel;
 	}
 
@@ -104,7 +104,7 @@ export class LinkProcessor {
 			}
 
 			// 使用更长的摘要以获取更多上下文信息
-			const summary = await this.zhipu.summarizeText(content, 300, this.textModel);
+			const summary = await this.provider.summarizeText(content, 300, this.textModel);
 
 			return {
 				...link,
