@@ -1,0 +1,29 @@
+# 发布时忽略的文件
+
+# 源代码
+src/
+
+# 开发配置
+tsconfig.json
+esbuild.config.mjs
+version-bump.mjs
+
+# 依赖
+node_modules/
+
+# 文档（可选，根据需要）
+README.md
+EXAMPLE.md
+需求文档 copy.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# 其他
+*.log
+.DS_Store
