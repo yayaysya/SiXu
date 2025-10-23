@@ -1,4 +1,4 @@
-import { ImageInfo, LinkInfo, PromptTemplate } from '../types';
+import { ImageInfo, LinkInfo, PromptTemplate, ParsedMarkdown } from '../types';
 import { ZhipuAI } from '../api/zhipu';
 import { fillTemplate } from '../prompts/templates';
 
@@ -21,7 +21,8 @@ export class TextProcessor {
 		originalContent: string,
 		processedImages: ImageInfo[],
 		processedLinks: LinkInfo[],
-		template: PromptTemplate
+		template: PromptTemplate,
+		metadata?: ParsedMarkdown['metadata']
 	): Promise<string> {
 		// 分离成功和失败的链接
 		const successfulLinks = processedLinks.filter(link => link.fetchSuccess === true);
@@ -54,7 +55,8 @@ export class TextProcessor {
 			template,
 			originalContent,
 			imageInfoList,
-			linkInfoList
+			linkInfoList,
+			metadata
 		);
 
 		// 调用 AI 生成文章
@@ -75,6 +77,11 @@ export class TextProcessor {
 			finalArticle = this.appendReferencesSection(article, referencesSection);
 		}
 
+		// 确保元数据正确添加到文章中
+		if (metadata) {
+			finalArticle = this.ensureMetadata(finalArticle, metadata);
+		}
+
 		return finalArticle;
 	}
 
@@ -85,12 +92,26 @@ export class TextProcessor {
 		template: PromptTemplate,
 		content: string,
 		images: Array<{ index: number; description: string; markdown: string; alt: string }>,
-		links: Array<{ index: number; summary: string; text: string; url: string; markdown: string }>
+		links: Array<{ index: number; summary: string; text: string; url: string; markdown: string }>,
+		metadata?: ParsedMarkdown['metadata']
 	): { system: string; user: string } {
 		// 构建提示词部分
 		const promptParts: string[] = [];
 
 		promptParts.push("请将以下笔记内容整理成一篇完整的文章:\n");
+
+		// 如果有元数据,告知 AI
+		if (metadata && metadata.rawYaml) {
+			promptParts.push("\n【重要】原文档包含以下 YAML Front Matter,输出文章时必须完整保留在文章开头(用 --- 包裹):\n\n");
+			promptParts.push(metadata.rawYaml);
+			promptParts.push("\n");
+
+			// 如果有标签,提示 AI 在标题下方添加标签行
+			if (metadata.tags && metadata.tags.length > 0) {
+				const tagsLine = metadata.tags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ');
+				promptParts.push(`\n另外,请在文章标题下方添加标签行: **标签**: ${tagsLine}\n`);
+			}
+		}
 
 		// 原始笔记内容
 		promptParts.push("\n## 原始笔记内容\n");
@@ -154,6 +175,78 @@ export class TextProcessor {
 	}
 
 	/**
+	 * 确保元数据正确添加到文章中
+	 */
+	private ensureMetadata(article: string, metadata: ParsedMarkdown['metadata']): string {
+		let result = article.trim();
+
+		// 1. 确保 YAML Front Matter 在最前面
+		if (metadata.rawYaml || metadata.tags) {
+			// 更新 modified 日期为当前日期
+			const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD 格式
+			let yamlContent = metadata.rawYaml || '';
+
+			// 如果有 modified 字段,更新它
+			if (yamlContent.includes('modified:')) {
+				yamlContent = yamlContent.replace(/modified:\s*.+/, `modified: ${today}`);
+			} else if (yamlContent) {
+				// 如果没有 modified 字段,添加它
+				yamlContent = yamlContent + `\nmodified: ${today}`;
+			} else {
+				// 如果没有 YAML,创建基本的 YAML
+				yamlContent = `modified: ${today}`;
+			}
+
+			// 确保 YAML 中包含 tags (列表格式)
+			if (metadata.tags && metadata.tags.length > 0) {
+				const tagsListLines = metadata.tags.map(tag => `  - ${tag}`).join('\n');
+				const tagsYaml = `tags:\n${tagsListLines}`;
+
+				// 移除现有的 tags (支持两种格式)
+				if (yamlContent.match(/tags:/)) {
+					// 替换现有的 tags (数组格式或列表格式)
+					yamlContent = yamlContent.replace(
+						/tags:\s*(?:\[[\s\S]*?\]|(?:\n\s+-\s*.+)+)/,
+						tagsYaml
+					);
+				} else {
+					// 添加 tags
+					yamlContent = yamlContent + `\n${tagsYaml}`;
+				}
+			}
+
+			// 移除文章中可能已有的 YAML Front Matter
+			result = result.replace(/^---\n[\s\S]*?\n---\n?/, '');
+
+			// 添加 YAML Front Matter 到开头
+			result = `---\n${yamlContent}\n---\n\n${result}`;
+		}
+
+		// 2. 确保标签行在第一个标题下方
+		if (metadata.tags && metadata.tags.length > 0) {
+			const tagsLine = metadata.tags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join('  ');
+			const tagLineMarkdown = `\n**标签**: ${tagsLine}\n`;
+
+			// 查找第一个 # 标题
+			const titleMatch = result.match(/^(#\s+.+)$/m);
+			if (titleMatch) {
+				const titleLine = titleMatch[1];
+				const titleIndex = result.indexOf(titleLine);
+
+				// 检查标题下方是否已有标签行
+				const afterTitle = result.substring(titleIndex + titleLine.length);
+				if (!afterTitle.trim().startsWith('**标签**:')) {
+					// 在标题下方插入标签行
+					const beforeTitle = result.substring(0, titleIndex + titleLine.length);
+					result = beforeTitle + tagLineMarkdown + afterTitle;
+				}
+			}
+		}
+
+		return result;
+	}
+
+	/**
 	 * 构建引用部分(用于放置抓取失败的链接)
 	 */
 	private buildReferencesSection(failedLinks: LinkInfo[]): string {
@@ -171,8 +264,12 @@ export class TextProcessor {
 	 * 清理生成的文章
 	 */
 	cleanArticle(article: string): string {
+		// 移除可能的多余 YAML 代码块 (AI 可能误输出)
+		// 只移除包含 YAML front matter 字段的代码块
+		let cleaned = article.replace(/```yaml\s*\n([\s\S]*?(?:created|modified|publish|tags|完成度)[\s\S]*?)\n```\s*\n?/g, '');
+
 		// 移除可能的多余空行
-		let cleaned = article.replace(/\n{3,}/g, '\n\n');
+		cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
 
 		// 确保代码块格式正确
 		cleaned = cleaned.replace(/```(\w+)?\n/g, '```$1\n');

@@ -175,7 +175,8 @@ export default class NotebookLLMPlugin extends Plugin {
 				content,
 				processedImages,
 				processedLinks,
-				template
+				template,
+				parsed.metadata
 			);
 
 			// 5. 保存文件

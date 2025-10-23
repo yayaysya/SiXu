@@ -45,8 +45,14 @@ export interface ParsedMarkdown {
 	images: ImageInfo[];
 	links: LinkInfo[];
 	metadata: {
+		rawYaml?: string;
 		title?: string;
 		tags?: string[];
+		created?: string;
+		modified?: string;
+		publish?: boolean;
+		完成度?: number;
+		[key: string]: any; // 允许其他自定义字段
 	};
 }
 

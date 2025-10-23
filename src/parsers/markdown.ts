@@ -187,10 +187,42 @@ export class MarkdownParser {
 	}
 
 	/**
+	 * 提取正文中的标签
+	 */
+	private extractContentTags(content: string): string[] {
+		const tags: string[] = [];
+
+		// 1. 提取标签行: **标签**: #tag1 #tag2
+		const tagLineMatch = content.match(/\*\*标签\*\*:\s*(.+)/);
+		if (tagLineMatch) {
+			const tagMatches = tagLineMatch[1].matchAll(/#([\w\u4e00-\u9fa5_-]+)/g);
+			for (const match of tagMatches) {
+				tags.push(match[1]);
+			}
+		}
+
+		// 2. 提取正文中的 Obsidian 标签: #tag
+		// 移除 YAML Front Matter、代码块、标题行
+		const cleanContent = content
+			.replace(/^---\n[\s\S]*?\n---/m, '')  // 移除 YAML
+			.replace(/```[\s\S]*?```/g, '')       // 移除代码块
+			.replace(/^#{1,6}\s+.+$/gm, '');      // 移除标题行
+
+		// 匹配 #tag 格式 (前面是空白或行首,后面是空白、标点或行尾)
+		const obsidianTagMatches = cleanContent.matchAll(/(?:^|\s)#([\w\u4e00-\u9fa5_-]+)(?=\s|$|[,.:;!?，。：；！？])/gm);
+		for (const match of obsidianTagMatches) {
+			tags.push(match[1]);
+		}
+
+		// 去重并返回
+		return Array.from(new Set(tags));
+	}
+
+	/**
 	 * 提取元数据 (YAML front matter)
 	 */
-	private extractMetadata(content: string): { title?: string; tags?: string[] } {
-		const metadata: { title?: string; tags?: string[] } = {};
+	private extractMetadata(content: string): ParsedMarkdown['metadata'] {
+		const metadata: ParsedMarkdown['metadata'] = {};
 
 		// 匹配 YAML front matter
 		const frontMatterRegex = /^---\n([\s\S]*?)\n---/;
@@ -199,16 +231,55 @@ export class MarkdownParser {
 		if (match) {
 			const yamlContent = match[1];
 
+			// 保存原始 YAML 内容
+			metadata.rawYaml = yamlContent;
+
 			// 提取标题
 			const titleMatch = yamlContent.match(/title:\s*(.+)/);
 			if (titleMatch) {
 				metadata.title = titleMatch[1].trim().replace(/^["']|["']$/g, '');
 			}
 
-			// 提取标签
-			const tagsMatch = yamlContent.match(/tags:\s*\[([^\]]+)\]/);
+			// 提取标签 - 支持多种格式
+			// 格式1: tags: [tag1, tag2]
+			let tagsMatch = yamlContent.match(/tags:\s*\[([^\]]+)\]/);
 			if (tagsMatch) {
-				metadata.tags = tagsMatch[1].split(',').map(tag => tag.trim());
+				metadata.tags = tagsMatch[1].split(',').map(tag => tag.trim().replace(/^["']|["']$/g, ''));
+			} else {
+				// 格式2: tags:
+				//   - tag1
+				//   - tag2
+				const tagsListMatch = yamlContent.match(/tags:\s*\n((?:\s*-\s*.+\n?)+)/);
+				if (tagsListMatch) {
+					metadata.tags = tagsListMatch[1]
+						.split('\n')
+						.filter(line => line.trim().startsWith('-'))
+						.map(line => line.trim().substring(1).trim().replace(/^["']|["']$/g, ''));
+				}
+			}
+
+			// 提取 created
+			const createdMatch = yamlContent.match(/created:\s*(.+)/);
+			if (createdMatch) {
+				metadata.created = createdMatch[1].trim();
+			}
+
+			// 提取 modified
+			const modifiedMatch = yamlContent.match(/modified:\s*(.+)/);
+			if (modifiedMatch) {
+				metadata.modified = modifiedMatch[1].trim();
+			}
+
+			// 提取 publish
+			const publishMatch = yamlContent.match(/publish:\s*(.+)/);
+			if (publishMatch) {
+				metadata.publish = publishMatch[1].trim() === 'true';
+			}
+
+			// 提取 完成度
+			const completionMatch = yamlContent.match(/完成度:\s*(\d+)/);
+			if (completionMatch) {
+				metadata.完成度 = parseInt(completionMatch[1]);
 			}
 		}
 
@@ -218,6 +289,17 @@ export class MarkdownParser {
 			if (h1Match) {
 				metadata.title = h1Match[1].trim();
 			}
+		}
+
+		// 提取正文中的标签并合并
+		const contentTags = this.extractContentTags(content);
+		if (metadata.tags && metadata.tags.length > 0) {
+			// 合并 YAML 标签和正文标签,去重
+			const allTags = [...metadata.tags, ...contentTags];
+			metadata.tags = Array.from(new Set(allTags));
+		} else if (contentTags.length > 0) {
+			// 如果 YAML 没有标签,只使用正文标签
+			metadata.tags = contentTags;
 		}
 
 		return metadata;
