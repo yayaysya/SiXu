@@ -229,7 +229,10 @@ export class TextProcessor {
 		// 2. 确保标签行在第一个标题下方
 		if (metadata.tags && metadata.tags.length > 0) {
 			const tagsLine = metadata.tags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join('  ');
-			const tagLineMarkdown = `\n**标签**: ${tagsLine}\n`;
+			const tagLineMarkdown = `**标签**: ${tagsLine}`;
+
+			// 移除所有现有的标签行（可能 AI 生成了，也可能位置不对）
+			result = result.replace(/^\*\*标签\*\*:\s*#.*$/gm, '');
 
 			// 查找第一个 # 标题
 			const titleMatch = result.match(/^(#\s+.+)$/m);
@@ -237,15 +240,15 @@ export class TextProcessor {
 				const titleLine = titleMatch[1];
 				const titleIndex = result.indexOf(titleLine);
 
-				// 检查标题下方是否已有标签行
+				// 在标题下方插入标签行
+				const beforeTitle = result.substring(0, titleIndex + titleLine.length);
 				const afterTitle = result.substring(titleIndex + titleLine.length);
-				if (!afterTitle.trim().startsWith('**标签**:')) {
-					// 在标题下方插入标签行
-					const beforeTitle = result.substring(0, titleIndex + titleLine.length);
-					result = beforeTitle + tagLineMarkdown + afterTitle;
-				}
+				result = beforeTitle + `\n${tagLineMarkdown}\n` + afterTitle;
 			}
 		}
+
+		// 清理多余的空行（移除标签行后可能产生的）
+		result = result.replace(/\n{3,}/g, '\n\n');
 
 		return result;
 	}

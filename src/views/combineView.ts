@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, TFile } from 'obsidian';
+import { ItemView, WorkspaceLeaf, TFile, Notice } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { CombineNoteItem } from '../types';
 
@@ -126,11 +126,57 @@ export class CombineNotesView extends ItemView {
 	}
 
 	/**
-	 * 组合笔记（占位方法，后续实现）
+	 * 组合笔记
 	 */
 	private async combineNotes(): Promise<void> {
-		// TODO: 在后续步骤中实现
-		console.log('组合笔记功能待实现');
+		const notes = this.plugin.settings.combineNotes;
+
+		if (notes.length === 0) {
+			return;
+		}
+
+		try {
+			// 按 order 排序
+			const sortedNotes = [...notes].sort((a, b) => a.order - b.order);
+
+			// 收集所有文件对象
+			const files: TFile[] = [];
+			let hasError = false;
+
+			for (const note of sortedNotes) {
+				const file = this.plugin.app.vault.getAbstractFileByPath(note.path);
+
+				if (!(file instanceof TFile)) {
+					console.error('文件不存在:', note.path);
+					hasError = true;
+					continue;
+				}
+
+				files.push(file);
+			}
+
+			if (hasError) {
+				new Notice('部分文件读取失败，请检查文件是否存在');
+			}
+
+			if (files.length === 0) {
+				new Notice('没有可组合的文件');
+				return;
+			}
+
+			// 生成输出文件名
+			const today = new Date().toISOString().split('T')[0];
+			const outputFileName = `组合笔记_${today}.md`;
+			const outputPath = outputFileName;
+
+			// 调用主插件的处理逻辑，传递文件数组
+			await this.plugin.processCombinedNotes(files, outputPath);
+
+			new Notice(`组合笔记已开始处理，输出文件：${outputFileName}`);
+		} catch (error) {
+			console.error('组合笔记失败:', error);
+			new Notice(`组合笔记失败: ${error.message}`);
+		}
 	}
 
 	/**

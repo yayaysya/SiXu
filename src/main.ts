@@ -1,5 +1,5 @@
 import { App, Plugin, TFile, Notice, MarkdownView, WorkspaceLeaf } from 'obsidian';
-import { NotebookLLMSettings, DEFAULT_SETTINGS, TaskStatus } from './types';
+import { NotebookLLMSettings, DEFAULT_SETTINGS, TaskStatus, ImageInfo, LinkInfo } from './types';
 import { NotebookLLMSettingTab } from './settings';
 import { createTextProvider, createVisionProvider } from './api/factory';
 import { MarkdownParser } from './parsers/markdown';
@@ -308,6 +308,186 @@ export default class NotebookLLMPlugin extends Plugin {
 		}
 
 		return newPath;
+	}
+
+	/**
+	 * 处理组合笔记
+	 */
+	async processCombinedNotes(
+		files: TFile[],
+		outputPath: string
+	): Promise<void> {
+		// 验证 API Key
+		const textProviderConfig = this.settings.providers[this.settings.textProvider];
+		const visionProviderConfig = this.settings.providers[this.settings.visionProvider];
+
+		if (!textProviderConfig.apiKey) {
+			new Notice(`❌ 请先在设置中配置 ${this.settings.textProvider} 的 API Key`);
+			return;
+		}
+
+		if (!visionProviderConfig.apiKey) {
+			new Notice(`❌ 请先在设置中配置 ${this.settings.visionProvider} 的 API Key`);
+			return;
+		}
+
+		// 创建任务
+		const task = this.taskQueue.createTask('组合笔记', outputPath);
+
+		// 注册进度回调
+		this.taskQueue.onProgress(task.id, (progress, status, message) => {
+			this.statusBarManager.showTaskStatus(task.id, status, progress, message);
+		});
+
+		// 后台处理
+		this.processCombinedNotesInBackground(files, task.id, outputPath);
+	}
+
+	/**
+	 * 后台处理组合笔记
+	 */
+	private async processCombinedNotesInBackground(
+		files: TFile[],
+		taskId: string,
+		outputPath: string
+	): Promise<void> {
+		try {
+			// 初始化 AI 和处理器
+			const textProvider = createTextProvider(this.settings);
+			const visionProvider = createVisionProvider(this.settings);
+			const parser = new MarkdownParser(this.app);
+			const imageProcessor = new ImageProcessor(visionProvider, this.settings.visionModel);
+			const linkProcessor = new LinkProcessor(textProvider, this.settings.textModel);
+			const textProcessor = new TextProcessor(textProvider, this.settings.textModel);
+
+			// 1. 分别解析每个文件
+			this.taskQueue.updateProgress(taskId, 10, TaskStatus.PARSING, '解析笔记文件中...');
+
+			const allContents: string[] = [];
+			const allImages: ImageInfo[] = [];
+			const allLinks: LinkInfo[] = [];
+			const allTags: Set<string> = new Set();
+
+			for (let i = 0; i < files.length; i++) {
+				const file = files[i];
+				const content = await this.app.vault.read(file);
+
+				// 解析文件（保留正确的 sourceFile 上下文）
+				const parsed = await parser.parse(content, file);
+
+				// 提取标签
+				if (parsed.metadata?.tags) {
+					parsed.metadata.tags.forEach(tag => allTags.add(tag));
+				}
+
+				// 移除 YAML Front Matter，只保留正文
+				const contentWithoutYaml = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+				allContents.push(`# ${file.basename}\n\n${contentWithoutYaml.trim()}`);
+
+				// 收集所有图片和链接
+				allImages.push(...parsed.images);
+				allLinks.push(...parsed.links);
+			}
+
+			// 合并所有内容
+			const combinedContent = allContents.join('\n\n---\n\n');
+
+			// 2. 处理图片
+			this.taskQueue.updateProgress(taskId, 20, TaskStatus.PROCESSING_IMAGES, '开始识别图片...');
+			const processedImages = await imageProcessor.processImages(
+				allImages,
+				(completed, total) => {
+					const progress = 20 + Math.floor((completed / total) * 30);
+					const message = `图片${completed}/${total} 理解中...`;
+					this.taskQueue.updateProgress(taskId, progress, undefined, message);
+				}
+			);
+
+			// 3. 处理链接
+			this.taskQueue.updateProgress(taskId, 50, TaskStatus.PROCESSING_LINKS, '开始抓取链接内容...');
+			const processedLinks = await linkProcessor.processLinks(
+				allLinks,
+				(completed, total) => {
+					const progress = 50 + Math.floor((completed / total) * 20);
+					const message = `链接${completed}/${total} 内容抓取中...`;
+					this.taskQueue.updateProgress(taskId, progress, undefined, message);
+				}
+			);
+
+			// 4. 生成文章
+			this.taskQueue.updateProgress(taskId, 70, TaskStatus.GENERATING, '文章组合中...');
+
+			// 获取选中的模板
+			const template = getTemplate(
+				this.settings.selectedPromptTemplate,
+				this.settings.customPromptTemplates
+			);
+
+			if (!template) {
+				throw new Error('找不到选中的提示词模板');
+			}
+
+			// 构建元数据（包含合并的标签）
+			const metadata = {
+				tags: Array.from(allTags),
+				created: new Date().toISOString().split('T')[0],
+				modified: new Date().toISOString().split('T')[0]
+			};
+
+			const article = await textProcessor.generateArticle(
+				combinedContent,
+				processedImages,
+				processedLinks,
+				template,
+				metadata
+			);
+
+			// 5. 保存文件
+			this.taskQueue.updateProgress(taskId, 90, undefined, '保存文件中...');
+			const cleanedArticle = textProcessor.cleanArticle(article);
+
+			// 检查文件是否已存在
+			const existingFile = this.app.vault.getAbstractFileByPath(outputPath);
+			if (existingFile instanceof TFile) {
+				// 文件已存在，询问是否覆盖
+				const shouldOverwrite = await this.confirmOverwrite(outputPath.replace('.md', ''));
+				if (!shouldOverwrite) {
+					// 生成新的文件名
+					const today = new Date().toISOString().split('T')[0];
+					let counter = 2;
+					outputPath = `组合笔记_${today}_${counter}.md`;
+					while (this.app.vault.getAbstractFileByPath(outputPath)) {
+						counter++;
+						outputPath = `组合笔记_${today}_${counter}.md`;
+					}
+				}
+			}
+
+			// 创建或覆盖文件
+			if (existingFile instanceof TFile) {
+				await this.app.vault.modify(existingFile, cleanedArticle);
+			} else {
+				await this.app.vault.create(outputPath, cleanedArticle);
+			}
+
+			// 6. 完成
+			this.taskQueue.completeTask(taskId);
+			this.statusBarManager.hide();
+
+			// 显示完成通知
+			new Notice(`✅ 组合笔记整理完成!\n已保存至: ${outputPath}`, 5000);
+
+			// 打开新文件
+			const newFile = this.app.vault.getAbstractFileByPath(outputPath);
+			if (newFile instanceof TFile) {
+				await this.app.workspace.getLeaf().openFile(newFile);
+			}
+		} catch (error) {
+			console.error('处理组合笔记失败:', error);
+			this.taskQueue.failTask(taskId, error.message);
+			this.statusBarManager.hide();
+			new Notice(`❌ 处理失败: ${error.message}`, 5000);
+		}
 	}
 }
 
