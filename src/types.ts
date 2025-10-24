@@ -41,6 +41,9 @@ export interface NotebookLLMSettings {
 	outputFileNameTemplate: string;
 	selectedPromptTemplate: string;
 	customPromptTemplates: PromptTemplate[];
+
+	// 组合笔记配置
+	combineNotes: CombineNoteItem[];
 }
 
 /**
@@ -75,8 +78,20 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 	concurrency: 5,
 	outputFileNameTemplate: '{name}_AI整理',
 	selectedPromptTemplate: 'default',
-	customPromptTemplates: []
+	customPromptTemplates: [],
+
+	// 组合笔记默认为空
+	combineNotes: []
 };
+
+/**
+ * 组合笔记项
+ */
+export interface CombineNoteItem {
+	path: string;      // 文件路径
+	name: string;      // 文件名
+	order: number;     // 排序序号
+}
 
 /**
  * 公共提示词配置

@@ -91,3 +91,133 @@ button.mod-cta {
 button.mod-cta:hover {
     background-color: var(--interactive-accent-hover);
 }
+
+/* ===== 组合笔记侧边栏样式 ===== */
+
+/* 侧边栏容器 */
+.notebook-llm-combine-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 10px;
+}
+
+/* 标题区域 */
+.combine-view-header {
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 10px;
+}
+
+.combine-view-header h4 {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+/* 笔记列表区域 */
+.combine-view-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 5px 0;
+}
+
+/* 空状态提示 */
+.combine-view-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.combine-view-empty p {
+    font-size: 0.9em;
+    padding: 20px;
+    border: 2px dashed var(--background-modifier-border);
+    border-radius: 8px;
+    margin: 0;
+}
+
+/* 笔记项 */
+.combine-note-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    margin-bottom: 6px;
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    cursor: move;
+    transition: all 0.2s ease;
+}
+
+.combine-note-item:hover {
+    background-color: var(--background-modifier-hover);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 拖拽手柄 */
+.combine-note-handle {
+    color: var(--text-muted);
+    font-size: 1.2em;
+    cursor: grab;
+    user-select: none;
+    line-height: 1;
+}
+
+.combine-note-handle:active {
+    cursor: grabbing;
+}
+
+/* 文件名 */
+.combine-note-name {
+    flex: 1;
+    font-size: 0.9em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 删除按钮 */
+.combine-note-delete {
+    color: var(--text-muted);
+    font-size: 1.3em;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.combine-note-delete:hover {
+    color: var(--text-error);
+    background-color: var(--background-modifier-error);
+}
+
+/* 按钮区域 */
+.combine-view-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--background-modifier-border);
+    margin-top: 10px;
+}
+
+.combine-view-actions button {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 0.9em;
+}
+
+/* 拖拽状态 */
+.combine-note-item.dragging {
+    opacity: 0.5;
+}
+
+.combine-view-list.drag-over {
+    background-color: var(--background-modifier-hover);
+    border-radius: 6px;
+}

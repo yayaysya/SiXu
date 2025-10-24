@@ -1,4 +1,4 @@
-import { App, Plugin, TFile, Notice, MarkdownView } from 'obsidian';
+import { App, Plugin, TFile, Notice, MarkdownView, WorkspaceLeaf } from 'obsidian';
 import { NotebookLLMSettings, DEFAULT_SETTINGS, TaskStatus } from './types';
 import { NotebookLLMSettingTab } from './settings';
 import { createTextProvider, createVisionProvider } from './api/factory';
@@ -8,6 +8,7 @@ import { LinkProcessor } from './processors/link';
 import { TextProcessor } from './processors/text';
 import { TaskQueue, StatusBarManager } from './taskQueue';
 import { getTemplate } from './prompts/templates';
+import { CombineNotesView, COMBINE_VIEW_TYPE } from './views/combineView';
 
 export default class NotebookLLMPlugin extends Plugin {
 	settings: NotebookLLMSettings;
@@ -17,6 +18,12 @@ export default class NotebookLLMPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		// 注册组合笔记视图
+		this.registerView(
+			COMBINE_VIEW_TYPE,
+			(leaf) => new CombineNotesView(leaf, this)
+		);
+
 		// 初始化任务队列
 		this.taskQueue = new TaskQueue();
 
@@ -24,6 +31,15 @@ export default class NotebookLLMPlugin extends Plugin {
 		const statusBarItem = this.addStatusBarItem();
 		statusBarItem.style.display = 'none';
 		this.statusBarManager = new StatusBarManager(statusBarItem);
+
+		// 添加命令 - 打开组合笔记侧边栏
+		this.addCommand({
+			id: 'open-combine-notes-view',
+			name: '打开组合笔记侧边栏',
+			callback: () => {
+				this.activateCombineView();
+			}
+		});
 
 		// 添加命令
 		this.addCommand({
@@ -78,6 +94,36 @@ export default class NotebookLLMPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	/**
+	 * 激活组合笔记视图
+	 */
+	async activateCombineView() {
+		const { workspace } = this.app;
+
+		// 检查是否已经打开
+		let leaf: WorkspaceLeaf | null = null;
+		const leaves = workspace.getLeavesOfType(COMBINE_VIEW_TYPE);
+
+		if (leaves.length > 0) {
+			// 已存在，直接激活
+			leaf = leaves[0];
+		} else {
+			// 不存在，在右侧边栏创建
+			leaf = workspace.getRightLeaf(false);
+			if (leaf) {
+				await leaf.setViewState({
+					type: COMBINE_VIEW_TYPE,
+					active: true
+				});
+			}
+		}
+
+		// 激活视图
+		if (leaf) {
+			workspace.revealLeaf(leaf);
+		}
 	}
 
 	/**
