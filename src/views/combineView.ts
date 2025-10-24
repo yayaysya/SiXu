@@ -22,11 +22,11 @@ export class CombineNotesView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return '组合笔记';
+		return '思序-组合笔记';
 	}
 
 	getIcon(): string {
-		return 'layers';
+		return 'orbit';
 	}
 
 	async onOpen(): Promise<void> {
@@ -53,7 +53,7 @@ export class CombineNotesView extends ItemView {
 
 		// 标题区域
 		const headerEl = container.createDiv({ cls: 'combine-view-header' });
-		headerEl.createEl('h4', { text: '组合笔记' });
+		headerEl.createEl('h4', { text: '思序-组合笔记' });
 
 		// 笔记列表区域
 		const listEl = container.createDiv({ cls: 'combine-view-list' });

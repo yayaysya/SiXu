@@ -1,9 +1,9 @@
 {
   "id": "notebook-llm",
-  "name": "Notebook LLM - AI笔记整理",
+  "name": "思序",
   "version": "1.0.0",
   "minAppVersion": "0.15.0",
-  "description": "基于智谱AI的图文混排笔记自动化整理方案,支持图片识别、链接抓取和智能重组",
+  "description": "思序，让思路清晰有序, 整合散落思绪，构建知识体系",
   "author": "Your Name",
   "authorUrl": "https://github.com/yourusername",
   "isDesktopOnly": false

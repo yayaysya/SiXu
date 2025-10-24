@@ -202,6 +202,7 @@ button.mod-cta:hover {
     display: flex;
     gap: 8px;
     padding-top: 10px;
+    padding-bottom: 20px;
     border-top: 1px solid var(--background-modifier-border);
     margin-top: 10px;
 }
@@ -210,6 +211,17 @@ button.mod-cta:hover {
     flex: 1;
     padding: 8px 12px;
     font-size: 0.9em;
+}
+
+/* 组合整理按钮 - 主要操作按钮 */
+.combine-view-actions button.mod-cta {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    font-weight: 500;
+}
+
+.combine-view-actions button.mod-cta:hover {
+    background-color: var(--interactive-accent-hover);
 }
 
 /* 拖拽状态 */

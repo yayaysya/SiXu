@@ -76,6 +76,15 @@ export default class NotebookLLMPlugin extends Plugin {
 		// 添加设置面板
 		this.addSettingTab(new NotebookLLMSettingTab(this.app, this));
 
+		// 添加左侧功能区图标
+		this.addRibbonIcon(
+			'orbit',
+			'打开思绪-组合笔记',
+			() => {
+				this.activateCombineView();
+			}
+		);
+
 		// 定期清理已完成的任务
 		this.registerInterval(
 			window.setInterval(() => {
