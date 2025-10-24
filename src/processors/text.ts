@@ -121,8 +121,12 @@ export class TextProcessor {
 		if (images.length > 0) {
 			promptParts.push("\n\n【以下是可用的图片,请在文章中合适位置自然插入,不要单独列出图片列表】\n\n");
 			images.forEach((img, i) => {
+				// 区分本地图片(Obsidian格式)和远程图片(标准markdown格式)
+				const formatNote = img.markdown.startsWith('![[')
+					? '(Obsidian本地图片格式,请保持原样)'
+					: '';
 				promptParts.push(
-					`图片${i + 1}: ${img.markdown}\n` +
+					`图片${i + 1}: ${img.markdown} ${formatNote}\n` +
 					`描述: ${img.description}\n\n`
 				);
 			});

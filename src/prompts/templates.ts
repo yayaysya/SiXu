@@ -36,7 +36,9 @@ export const BUILTIN_TEMPLATES: PromptTemplate[] = [
 5. **智能插入图片:** 理解每张图片的内容,将其插入到文章中最合适、最相关的位置
 6. **自然引用链接:** 理解每个链接的核心内容,在文章中自然引用并插入到相关位置
 7. **输出 Markdown 格式**
-8. **图片格式:** ![描述](原始URL) - 使用原始URL,不要修改
+8. **图片格式:**
+   - Obsidian本地图片 ![[...]] - 必须保持原样,不要修改格式
+   - 标准markdown图片 ![描述](URL) - 使用原始URL,不要修改
 9. **链接格式:** [标题](原始URL) - 使用原始URL,不要修改
 10. **重要: 保留所有代码块原样,使用 \`\`\`language 格式**
 11. **重要: 保留所有引用块(>)、分隔线(---)等特殊格式**
@@ -50,7 +52,8 @@ export const BUILTIN_TEMPLATES: PromptTemplate[] = [
 3. 把提供的素材信息当做文章内容输出
 
 **正确做法**:
-- 图片直接在相关段落插入: ![描述](URL)
+- Obsidian格式图片保持原样: ![[图片名]]
+- 标准markdown图片直接插入: ![描述](URL)
 - 链接在相关段落引用: [文本](URL)
 - 或在文末简单引用`,
 		userPromptTemplate: `请帮我整理以下笔记:
@@ -94,7 +97,9 @@ export const BUILTIN_TEMPLATES: PromptTemplate[] = [
 4. **合理组织结构(可添加小标题):** 使用 ## 二级标题组织内容
 5. **在合适位置插入图片和引用链接:** 根据图片内容和链接主题,插入到最相关的段落
 6. **输出 Markdown 格式**
-7. **图片格式:** ![描述](原始URL)
+7. **图片格式:**
+   - Obsidian本地图片 ![[...]] - 必须保持原样,不要修改格式
+   - 标准markdown图片 ![描述](URL) - 使用原始URL,不要修改
 8. **链接格式:** [标题](原始URL)
 9. **重要: 保留所有代码块原样,使用 \`\`\`language 格式**
 10. **重要: 保留所有引用块(>)、分隔线(---)等特殊格式**
@@ -108,7 +113,8 @@ export const BUILTIN_TEMPLATES: PromptTemplate[] = [
 3. 把提供的素材信息当做文章内容输出
 
 **正确做法**:
-- 图片直接在相关段落插入: ![描述](URL)
+- Obsidian格式图片保持原样: ![[图片名]]
+- 标准markdown图片直接插入: ![描述](URL)
 - 链接在相关段落引用: [文本](URL)
 - 或在文末简单引用`,
 		userPromptTemplate: `请将以下笔记改写成适合公众号发布的文章:
@@ -136,6 +142,7 @@ export const BUILTIN_TEMPLATES: PromptTemplate[] = [
 文档编写原则:
 - 图片要插入到它所展示的技术概念的说明部分
 - 架构图/流程图放在相关章节的开头,效果图/截图放在操作说明之后
+- Obsidian格式图片 ![[...]] 必须保持原样,标准markdown图片使用原始URL
 - 链接要在讨论相关技术时自然引用,如"详见[官方文档](url)"
 - 代码块、配置文件、命令等完整保留
 - 使用有序列表描述步骤,无序列表描述要点`,
@@ -166,6 +173,7 @@ export const BUILTIN_TEMPLATES: PromptTemplate[] = [
 - 使用正式的学术语言
 - 观点需要有依据支撑
 - 引用格式规范
+- Obsidian格式图片 ![[...]] 必须保持原样,标准markdown图片使用原始URL
 - 避免主观情绪化表达
 - 结构完整(引言、正文、结论)`,
 		userPromptTemplate: `请将以下研究笔记整理成学术论文风格的文章:
@@ -195,6 +203,7 @@ export const BUILTIN_TEMPLATES: PromptTemplate[] = [
 - 简洁明了,避免冗余
 - 保留关键数据和事实
 - 使用bullet points或编号列表
+- Obsidian格式图片 ![[...]] 必须保持原样,标准markdown图片使用原始URL
 - 突出核心结论
 - 长度控制在原文的30-50%`,
 		userPromptTemplate: `请提炼以下笔记的核心要点:
