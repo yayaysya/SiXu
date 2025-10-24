@@ -79,14 +79,21 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 };
 
 /**
+ * 公共提示词配置
+ */
+export interface CommonPrompts {
+	baseRole: string;      // 基础角色定义
+	formatRules: string;   // 公共格式要求
+}
+
+/**
  * 提示词模板
  */
 export interface PromptTemplate {
 	id: string;
 	name: string;
 	description: string;
-	systemPrompt: string;
-	userPromptTemplate: string;
+	stylePrompt: string;   // 写作风格提示词（用户可自定义）
 }
 
 /**

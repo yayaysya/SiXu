@@ -1,6 +1,6 @@
 import { ImageInfo, LinkInfo, PromptTemplate, ParsedMarkdown } from '../types';
 import { UnifiedAIProvider } from '../api/unified';
-import { fillTemplate } from '../prompts/templates';
+import { buildSystemPrompt } from '../prompts/templates';
 
 /**
  * 文本整合处理器
@@ -156,9 +156,9 @@ export class TextProcessor {
 
 		const userPrompt = promptParts.join('');
 
-		// 使用模板的 system prompt (已经包含所有要求)
+		// 组装完整的系统提示词（基础角色 + 写作风格 + 格式要求）
 		return {
-			system: template.systemPrompt,
+			system: buildSystemPrompt(template),
 			user: userPrompt
 		};
 	}

@@ -528,8 +528,7 @@ class CustomTemplateModal extends Modal {
 
 	private nameInput: HTMLInputElement;
 	private descInput: HTMLInputElement;
-	private systemPromptInput: HTMLTextAreaElement;
-	private userPromptInput: HTMLTextAreaElement;
+	private stylePromptInput: HTMLTextAreaElement;
 
 	constructor(
 		app: App,
@@ -561,24 +560,15 @@ class CustomTemplateModal extends Modal {
 		this.descInput.value = this.template?.description || '';
 		this.descInput.style.width = '100%';
 
-		// 系统提示词
-		const systemDiv = contentEl.createDiv({ cls: 'setting-item' });
-		systemDiv.createEl('div', { text: '系统提示词', cls: 'setting-item-name' });
-		this.systemPromptInput = systemDiv.createEl('textarea');
-		this.systemPromptInput.value = this.template?.systemPrompt || '';
-		this.systemPromptInput.rows = 8;
-		this.systemPromptInput.style.width = '100%';
+		// 写作风格提示词
+		const styleDiv = contentEl.createDiv({ cls: 'setting-item' });
+		styleDiv.createEl('div', { text: '写作风格提示词', cls: 'setting-item-name' });
 
-		// 用户提示词模板
-		const userDiv = contentEl.createDiv({ cls: 'setting-item' });
-		userDiv.createEl('div', {
-			text: '用户提示词模板 (使用 {content}, {images_section}, {links_section})',
-			cls: 'setting-item-name'
-		});
-		this.userPromptInput = userDiv.createEl('textarea');
-		this.userPromptInput.value = this.template?.userPromptTemplate || '';
-		this.userPromptInput.rows = 8;
-		this.userPromptInput.style.width = '100%';
+		this.stylePromptInput = styleDiv.createEl('textarea');
+		this.stylePromptInput.value = this.template?.stylePrompt || '';
+		this.stylePromptInput.rows = 12;
+		this.stylePromptInput.style.width = '100%';
+		this.stylePromptInput.placeholder = '定义写作角色、风格和表达方式（格式要求由系统自动添加）\n\n例如：\n你是一位经验丰富的技术博主...\n\n写作风格：\n- 第一人称视角\n- 口语化表达\n- 注重实践经验分享';
 
 		// 按钮
 		const buttonDiv = contentEl.createDiv({ cls: 'modal-button-container' });
@@ -602,10 +592,9 @@ class CustomTemplateModal extends Modal {
 	private submit(): void {
 		const name = this.nameInput.value.trim();
 		const description = this.descInput.value.trim();
-		const systemPrompt = this.systemPromptInput.value.trim();
-		const userPromptTemplate = this.userPromptInput.value.trim();
+		const stylePrompt = this.stylePromptInput.value.trim();
 
-		if (!name || !systemPrompt || !userPromptTemplate) {
+		if (!name || !stylePrompt) {
 			new Notice('请填写所有必填字段');
 			return;
 		}
@@ -614,8 +603,7 @@ class CustomTemplateModal extends Modal {
 			id: this.template?.id || `custom_${Date.now()}`,
 			name,
 			description,
-			systemPrompt,
-			userPromptTemplate
+			stylePrompt
 		};
 
 		this.onSubmit(template);
