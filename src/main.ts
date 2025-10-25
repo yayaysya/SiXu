@@ -436,11 +436,13 @@ export default class NotebookLLMPlugin extends Plugin {
 				throw new Error('找不到选中的提示词模板');
 			}
 
-			// 构建元数据（包含合并的标签）
+			// 构建元数据（包含合并的标签和源文件列表）
+			const sourceFiles = files.map(file => `[[${file.basename}]]`);
 			const metadata = {
 				tags: Array.from(allTags),
 				created: new Date().toISOString().split('T')[0],
-				modified: new Date().toISOString().split('T')[0]
+				modified: new Date().toISOString().split('T')[0],
+				source_files: sourceFiles
 			};
 
 			const article = await textProcessor.generateArticle(

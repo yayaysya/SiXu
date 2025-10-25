@@ -201,6 +201,23 @@ export class TextProcessor {
 				yamlContent = `modified: ${today}`;
 			}
 
+			// 确保 YAML 中包含 source_files (列表格式)
+			if (metadata.source_files && metadata.source_files.length > 0) {
+				const sourceFilesListLines = metadata.source_files.map((file: string) => `  - "${file}"`).join('\n');
+				const sourceFilesYaml = `source_files:\n${sourceFilesListLines}`;
+
+				// 移除现有的 source_files
+				if (yamlContent.match(/source_files:/)) {
+					yamlContent = yamlContent.replace(
+						/source_files:\s*(?:\[[\s\S]*?\]|(?:\n\s+-\s*.+)+)/,
+						sourceFilesYaml
+					);
+				} else {
+					// 添加 source_files
+					yamlContent = yamlContent + `\n${sourceFilesYaml}`;
+				}
+			}
+
 			// 确保 YAML 中包含 tags (列表格式)
 			if (metadata.tags && metadata.tags.length > 0) {
 				const tagsListLines = metadata.tags.map(tag => `  - ${tag}`).join('\n');
