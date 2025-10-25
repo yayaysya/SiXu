@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, TFile, Notice } from 'obsidian';
+import { ItemView, WorkspaceLeaf, TFile, Notice, EventRef } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { CombineNoteItem } from '../types';
 
@@ -14,6 +14,8 @@ export class CombineNotesView extends ItemView {
 	private draggedIndex: number | null = null;
 	private isRendered: boolean = false;
 	private activeTab: TabType = 'combine';
+	private fileChangeEventRef: EventRef | null = null;
+	private metadataChangeEventRef: EventRef | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: NotebookLLMPlugin) {
 		super(leaf);
@@ -37,6 +39,22 @@ export class CombineNotesView extends ItemView {
 		container.empty();
 		container.addClass('notebook-llm-combine-view');
 
+		// 监听文件切换事件
+		this.fileChangeEventRef = this.plugin.app.workspace.on('active-leaf-change', () => {
+			if (this.activeTab === 'sources') {
+				this.render();
+			}
+		});
+
+		// 监听元数据变化事件（检测 YAML 修改）
+		this.metadataChangeEventRef = this.plugin.app.metadataCache.on('changed', (file) => {
+			// 只在源文件引用标签页且修改的是当前打开的文件时刷新
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (this.activeTab === 'sources' && activeFile && file.path === activeFile.path) {
+				this.render();
+			}
+		});
+
 		if (!this.isRendered) {
 			this.render();
 			this.isRendered = true;
@@ -44,6 +62,14 @@ export class CombineNotesView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
+		// 清理事件监听器
+		if (this.fileChangeEventRef) {
+			this.plugin.app.workspace.offref(this.fileChangeEventRef);
+		}
+		if (this.metadataChangeEventRef) {
+			this.plugin.app.metadataCache.offref(this.metadataChangeEventRef);
+		}
+
 		this.containerEl.empty();
 	}
 
