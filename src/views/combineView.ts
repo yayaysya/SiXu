@@ -1030,6 +1030,15 @@ export class CombineNotesView extends ItemView {
 	}
 
 	/**
+	 * 从选项中提取字母标签（如 "A. 内容" -> "A"）
+	 * 只匹配开头的格式，避免内容中的字母干扰
+	 */
+	private extractOptionLabel(option: string): string {
+		const match = option.match(/^([A-Z])\.\s/);
+		return match ? match[1] : option;
+	}
+
+	/**
 	 * 渲染题目输入区域
 	 */
 	private renderQuestionInput(container: HTMLElement, question: QuizQuestion): void {
@@ -1039,27 +1048,31 @@ export class CombineNotesView extends ItemView {
 			// 单选题
 			question.options?.forEach((option) => {
 				const labelEl = container.createEl('label', { cls: 'exam-option' });
+				const optionLabel = this.extractOptionLabel(option);  // 提取字母
+
 				const radio = labelEl.createEl('input', {
 					type: 'radio',
-					attr: { name: `question-${question.id}`, value: option }
+					attr: { name: `question-${question.id}`, value: optionLabel }
 				});
-				if (currentAnswer === option) {
+				if (currentAnswer === optionLabel) {
 					radio.checked = true;
 				}
 				radio.addEventListener('change', () => {
-					this.userAnswers.set(question.id, option);
+					this.userAnswers.set(question.id, optionLabel);  // 存储字母
 				});
-				labelEl.createSpan({ text: option });
+				labelEl.createSpan({ text: option });  // 显示完整选项
 			});
 		} else if (question.type === 'multiple-choice') {
 			// 多选题
 			question.options?.forEach((option) => {
 				const labelEl = container.createEl('label', { cls: 'exam-option' });
+				const optionLabel = this.extractOptionLabel(option);  // 提取字母
+
 				const checkbox = labelEl.createEl('input', {
 					type: 'checkbox',
-					attr: { value: option }
+					attr: { value: optionLabel }
 				});
-				if (Array.isArray(currentAnswer) && currentAnswer.includes(option)) {
+				if (Array.isArray(currentAnswer) && currentAnswer.includes(optionLabel)) {
 					checkbox.checked = true;
 				}
 				checkbox.addEventListener('change', () => {
@@ -1067,13 +1080,13 @@ export class CombineNotesView extends ItemView {
 					if (!Array.isArray(selected)) selected = [];
 
 					if (checkbox.checked) {
-						selected.push(option);
+						selected.push(optionLabel);  // 存储字母
 					} else {
-						selected = selected.filter(s => s !== option);
+						selected = selected.filter(s => s !== optionLabel);
 					}
 					this.userAnswers.set(question.id, selected);
 				});
-				labelEl.createSpan({ text: option });
+				labelEl.createSpan({ text: option });  // 显示完整选项
 			});
 		} else if (question.type === 'fill-blank') {
 			// 填空题
@@ -1402,6 +1415,7 @@ export class CombineNotesView extends ItemView {
 	private async updateQuizFileResults(quizFile: TFile, resultFile: TFile): Promise<void> {
 		try {
 			const content = await this.plugin.app.vault.read(quizFile);
+			const resultLink = `"[[${resultFile.basename}]]"`;  // 添加引号
 
 			// 解析YAML
 			const yamlMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -1409,23 +1423,42 @@ export class CombineNotesView extends ItemView {
 				return;
 			}
 
-			const yamlContent = yamlMatch[1];
-			const resultLink = `[[${resultFile.basename}]]`;
+			let yamlContent = yamlMatch[1];
 
 			// 检查是否已有quiz_results字段
-			let newYaml: string;
 			if (yamlContent.includes('quiz_results:')) {
-				// 添加到现有列表
-				newYaml = yamlContent.replace(
-					/(quiz_results:\s*\n(?:\s*-\s*\[\[.*?\]\]\n)*)/,
-					`$1  - ${resultLink}\n`
-				);
+				// 找到quiz_results行并插入新链接
+				const lines = yamlContent.split('\n');
+				let resultsIndex = -1;
+				let insertIndex = -1;
+
+				for (let i = 0; i < lines.length; i++) {
+					if (lines[i].trim().startsWith('quiz_results:')) {
+						resultsIndex = i;
+						// 找到下一个不是列表项的行
+						for (let j = i + 1; j < lines.length; j++) {
+							if (!lines[j].trim().startsWith('-')) {
+								insertIndex = j;
+								break;
+							}
+						}
+						if (insertIndex === -1) {
+							insertIndex = lines.length;
+						}
+						break;
+					}
+				}
+
+				if (resultsIndex !== -1) {
+					lines.splice(insertIndex, 0, `  - ${resultLink}`);
+					yamlContent = lines.join('\n');
+				}
 			} else {
 				// 添加新字段
-				newYaml = yamlContent + `\nquiz_results:\n  - ${resultLink}\n`;
+				yamlContent = yamlContent.trimEnd() + `\nquiz_results:\n  - ${resultLink}`;
 			}
 
-			const newContent = content.replace(yamlMatch[0], `---\n${newYaml}---`);
+			const newContent = content.replace(yamlMatch[0], `---\n${yamlContent}\n---`);
 			await this.plugin.app.vault.modify(quizFile, newContent);
 		} catch (error) {
 			console.error('更新quiz文件失败:', error);

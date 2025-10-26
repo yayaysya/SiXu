@@ -181,9 +181,11 @@ ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截
 - id格式为 q1, q2, q3...
 - type必须是: single-choice, multiple-choice, fill-blank, short-answer 之一
 - difficulty必须是: 简单, 中等, 困难 之一
+- **选项格式必须严格遵守 "字母. 内容" 格式（如 "A. 配置文件"）**
+- **字母后必须是英文句点和一个空格，然后是选项内容**
 - 单选题和多选题必须有options字段
-- 单选题的answer是单个选项（如"A"）
-- 多选题的answer是数组（如["A", "C"]）
+- **单选题的answer是单个字母（如 "A"，不要带句点和内容）**
+- **多选题的answer是字母数组（如 ["A", "C"]，不要带句点和内容）**
 - 填空题和简答题不需要options字段
 `;
 	}
@@ -258,10 +260,26 @@ ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截
 		const quizDir = this.plugin.settings.quizDir;
 		await this.ensureDirectory(quizDir);
 
-		// 生成文件名
-		const timestamp = new Date().toISOString().split('T')[0];
-		const fileName = `${sourceFile.basename}_Quiz_${timestamp}.md`;
-		const filePath = `${quizDir}/${fileName}`;
+		// 生成唯一文件名（包含时间戳和序号）
+		const now = new Date();
+		const dateStr = now.toISOString().split('T')[0];  // 2025-10-26
+		const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');  // 14-30-45
+
+		let fileName = '';
+		let filePath = '';
+		let sequenceNum = 1;
+
+		// 检查文件是否已存在，如果存在则增加序号
+		while (true) {
+			fileName = `${sourceFile.basename}_Quiz_${dateStr}_${timeStr}_${sequenceNum}.md`;
+			filePath = `${quizDir}/${fileName}`;
+
+			const exists = await this.app.vault.adapter.exists(filePath);
+			if (!exists) {
+				break;
+			}
+			sequenceNum++;
+		}
 
 		// 统计题型
 		const typeStats = this.calculateTypeStats(questions);
@@ -382,7 +400,7 @@ created: ${now}
 	private async updateSourceFileQuizzes(sourceFile: TFile, quizFile: TFile): Promise<void> {
 		try {
 			const content = await this.app.vault.read(sourceFile);
-			const quizLink = `[[${quizFile.basename}]]`;
+			const quizLink = `"[[${quizFile.basename}]]"`;  // 添加引号
 
 			// 解析YAML
 			const yamlMatch = content.match(/^---\n([\s\S]*?)\n---/);
