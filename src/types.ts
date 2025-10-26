@@ -44,6 +44,10 @@ export interface NotebookLLMSettings {
 
 	// 组合笔记配置
 	combineNotes: CombineNoteItem[];
+
+	// Quiz配置
+	quizDir: string;      // Quiz文件目录
+	resultDir: string;    // 结果文件目录
 }
 
 /**
@@ -81,7 +85,11 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 	customPromptTemplates: [],
 
 	// 组合笔记默认为空
-	combineNotes: []
+	combineNotes: [],
+
+	// Quiz目录配置
+	quizDir: 'quiz',
+	resultDir: 'quiz/results'
 };
 
 /**
@@ -227,3 +235,86 @@ export interface ZhipuResponse {
  * 处理进度回调
  */
 export type ProgressCallback = (progress: number, status: TaskStatus, message?: string) => void;
+
+/**
+ * Quiz题目类型
+ */
+export type QuestionType = 'single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer';
+
+/**
+ * 题目难度
+ */
+export type QuestionDifficulty = '简单' | '中等' | '困难';
+
+/**
+ * Quiz题目
+ */
+export interface QuizQuestion {
+	id: string;
+	type: QuestionType;
+	difficulty: QuestionDifficulty;
+	question: string;
+	options?: string[];           // 选择题选项
+	answer: string | string[];    // 答案
+	explanation: string;          // 解析
+}
+
+/**
+ * 用户答案
+ */
+export interface UserAnswer {
+	questionId: string;
+	answer: string | string[];
+	timestamp: number;
+}
+
+/**
+ * Quiz元信息
+ */
+export interface QuizMetadata {
+	title: string;
+	sourceFile: string;           // 关联的源文档
+	difficulty: QuestionDifficulty;
+	totalQuestions: number;
+	questionTypes: {
+		type: string;
+		count: number;
+	}[];
+	quizResults: string[];        // 关联的结果文件列表
+	created: string;
+}
+
+/**
+ * Quiz文件数据
+ */
+export interface QuizData {
+	metadata: QuizMetadata;
+	description: string;          // 简介
+	questions: QuizQuestion[];
+}
+
+/**
+ * 单题评分结果
+ */
+export interface QuizQuestionResult {
+	questionId: string;
+	userAnswer: string | string[];
+	correctAnswer: string | string[];
+	score: number;
+	maxScore: number;
+	feedback?: string;            // AI评分反馈
+}
+
+/**
+ * Quiz考试结果
+ */
+export interface QuizResult {
+	quizFile: string;
+	examDate: string;
+	totalScore: number;
+	maxScore: number;
+	breakdown: Record<string, string>;  // 各题型得分
+	weakAreas: string[];
+	strongAreas: string[];
+	details: QuizQuestionResult[];
+}
