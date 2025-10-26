@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, TFile, Notice, EventRef } from 'obsidian';
+import { ItemView, WorkspaceLeaf, TFile, Notice, EventRef, Modal, App } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { CombineNoteItem, QuizQuestion, QuizQuestionResult, QuizData } from '../types';
 
@@ -835,96 +835,10 @@ export class CombineNotesView extends ItemView {
 		questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
 	} | null> {
 		return new Promise((resolve) => {
-			// 创建一个简单的对话框
-			const modal = document.createElement('div');
-			modal.addClass('modal');
-			modal.style.cssText = 'display: flex; align-items: center; justify-content: center;';
-
-			const container = modal.createDiv({ cls: 'modal-container' });
-			container.style.cssText = 'background: var(--background-primary); padding: 20px; border-radius: 8px; max-width: 400px; width: 90%;';
-
-			// 标题
-			container.createEl('h3', { text: '生成Quiz设置' });
-
-			// 难度选择
-			const difficultyGroup = container.createDiv({ cls: 'setting-item' });
-			difficultyGroup.createDiv({ text: '难度等级', cls: 'setting-item-name' });
-			const difficultySelect = difficultyGroup.createEl('select');
-			['简单', '中等', '困难'].forEach(d => {
-				const option = difficultySelect.createEl('option', { text: d, value: d });
-				if (d === '中等') option.selected = true;
+			const modal = new QuizGenerationModal(this.plugin.app, (result) => {
+				resolve(result);
 			});
-
-			// 题目数量
-			const countGroup = container.createDiv({ cls: 'setting-item' });
-			countGroup.createDiv({ text: '题目数量', cls: 'setting-item-name' });
-			const countInput = countGroup.createEl('input', { type: 'number', value: '10' });
-			countInput.min = '5';
-			countInput.max = '30';
-			countInput.style.width = '100%';
-
-			// 题型选择
-			const typesGroup = container.createDiv({ cls: 'setting-item' });
-			typesGroup.createDiv({ text: '题型（多选）', cls: 'setting-item-name' });
-			const typesContainer = typesGroup.createDiv();
-
-			const typeOptions = [
-				{ value: 'single-choice', label: '单选题' },
-				{ value: 'multiple-choice', label: '多选题' },
-				{ value: 'fill-blank', label: '填空题' },
-				{ value: 'short-answer', label: '简答题' }
-			];
-
-			const typeCheckboxes: { value: string; checkbox: HTMLInputElement }[] = [];
-
-			typeOptions.forEach(type => {
-				const label = typesContainer.createEl('label', { cls: 'checkbox-label' });
-				label.style.cssText = 'display: block; margin: 5px 0;';
-				const checkbox = label.createEl('input', { type: 'checkbox' });
-				checkbox.value = type.value;
-				checkbox.checked = true;
-				label.appendText(' ' + type.label);
-				typeCheckboxes.push({ value: type.value, checkbox });
-			});
-
-			// 按钮
-			const buttonGroup = container.createDiv({ cls: 'modal-button-container' });
-			buttonGroup.style.cssText = 'display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;';
-
-			const cancelBtn = buttonGroup.createEl('button', { text: '取消' });
-			cancelBtn.addEventListener('click', () => {
-				document.body.removeChild(modal);
-				resolve(null);
-			});
-
-			const confirmBtn = buttonGroup.createEl('button', { text: '生成', cls: 'mod-cta' });
-			confirmBtn.addEventListener('click', () => {
-				const selectedTypes = typeCheckboxes
-					.filter(t => t.checkbox.checked)
-					.map(t => t.value as 'single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer');
-
-				if (selectedTypes.length === 0) {
-					new Notice('请至少选择一种题型');
-					return;
-				}
-
-				const difficulty = difficultySelect.value as '简单' | '中等' | '困难';
-				const totalQuestions = parseInt(countInput.value);
-
-				if (totalQuestions < 5 || totalQuestions > 30) {
-					new Notice('题目数量应在5-30之间');
-					return;
-				}
-
-				document.body.removeChild(modal);
-				resolve({
-					difficulty,
-					totalQuestions,
-					questionTypes: selectedTypes
-				});
-			});
-
-			document.body.appendChild(modal);
+			modal.open();
 		});
 	}
 
@@ -1463,5 +1377,131 @@ export class CombineNotesView extends ItemView {
 		} catch (error) {
 			console.error('更新quiz文件失败:', error);
 		}
+	}
+}
+
+/**
+ * Quiz生成选项对话框
+ */
+class QuizGenerationModal extends Modal {
+	private result: {
+		difficulty: '简单' | '中等' | '困难';
+		totalQuestions: number;
+		questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
+	} | null = null;
+	private onSubmit: (result: {
+		difficulty: '简单' | '中等' | '困难';
+		totalQuestions: number;
+		questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
+	} | null) => void;
+
+	private difficultySelect: HTMLSelectElement;
+	private countInput: HTMLInputElement;
+	private typeCheckboxes: { value: string; checkbox: HTMLInputElement }[] = [];
+
+	constructor(
+		app: App,
+		onSubmit: (result: {
+			difficulty: '简单' | '中等' | '困难';
+			totalQuestions: number;
+			questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
+		} | null) => void
+	) {
+		super(app);
+		this.onSubmit = onSubmit;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+
+		// 标题
+		contentEl.createEl('h3', { text: '生成Quiz设置' });
+
+		// 难度选择
+		const difficultyGroup = contentEl.createDiv({ cls: 'setting-item' });
+		difficultyGroup.createDiv({ text: '难度等级', cls: 'setting-item-name' });
+		this.difficultySelect = difficultyGroup.createEl('select');
+		['简单', '中等', '困难'].forEach(d => {
+			const option = this.difficultySelect.createEl('option', { text: d, value: d });
+			if (d === '中等') option.selected = true;
+		});
+
+		// 题目数量
+		const countGroup = contentEl.createDiv({ cls: 'setting-item' });
+		countGroup.createDiv({ text: '题目数量', cls: 'setting-item-name' });
+		this.countInput = countGroup.createEl('input', { type: 'number', value: '10' });
+		this.countInput.min = '5';
+		this.countInput.max = '30';
+		this.countInput.style.width = '100%';
+
+		// 题型选择
+		const typesGroup = contentEl.createDiv({ cls: 'setting-item' });
+		typesGroup.createDiv({ text: '题型（多选）', cls: 'setting-item-name' });
+		const typesContainer = typesGroup.createDiv();
+
+		const typeOptions = [
+			{ value: 'single-choice', label: '单选题' },
+			{ value: 'multiple-choice', label: '多选题' },
+			{ value: 'fill-blank', label: '填空题' },
+			{ value: 'short-answer', label: '简答题' }
+		];
+
+		typeOptions.forEach(type => {
+			const label = typesContainer.createEl('label', { cls: 'checkbox-label' });
+			label.style.cssText = 'display: block; margin: 5px 0;';
+			const checkbox = label.createEl('input', { type: 'checkbox' });
+			checkbox.value = type.value;
+			checkbox.checked = true;
+			label.appendText(' ' + type.label);
+			this.typeCheckboxes.push({ value: type.value, checkbox });
+		});
+
+		// 按钮
+		const buttonGroup = contentEl.createDiv({ cls: 'modal-button-container' });
+		buttonGroup.style.cssText = 'display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;';
+
+		const cancelBtn = buttonGroup.createEl('button', { text: '取消' });
+		cancelBtn.addEventListener('click', () => {
+			this.result = null;
+			this.close();
+		});
+
+		const confirmBtn = buttonGroup.createEl('button', { text: '生成', cls: 'mod-cta' });
+		confirmBtn.addEventListener('click', () => {
+			this.submit();
+		});
+	}
+
+	onClose(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		this.onSubmit(this.result);
+	}
+
+	private submit(): void {
+		const selectedTypes = this.typeCheckboxes
+			.filter(t => t.checkbox.checked)
+			.map(t => t.value as 'single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer');
+
+		if (selectedTypes.length === 0) {
+			new Notice('请至少选择一种题型');
+			return;
+		}
+
+		const difficulty = this.difficultySelect.value as '简单' | '中等' | '困难';
+		const totalQuestions = parseInt(this.countInput.value);
+
+		if (totalQuestions < 5 || totalQuestions > 30) {
+			new Notice('题目数量应在5-30之间');
+			return;
+		}
+
+		this.result = {
+			difficulty,
+			totalQuestions,
+			questionTypes: selectedTypes
+		};
+		this.close();
 	}
 }

@@ -989,40 +989,27 @@ button.mod-cta:hover {
 
 /* ===== Quiz生成对话框样式 ===== */
 
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 9999;
-}
-
-.modal-container {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-}
-
-.modal-container h3 {
+/* Obsidian Modal 自定义样式 */
+.modal h3 {
     margin: 0 0 20px 0;
     font-size: 1.2em;
     font-weight: 600;
     color: var(--text-normal);
 }
 
-.modal-container .setting-item {
+.modal .setting-item {
     margin-bottom: 16px;
 }
 
-.modal-container .setting-item-name {
+.modal .setting-item-name {
     font-size: 0.95em;
     font-weight: 500;
     color: var(--text-normal);
     margin-bottom: 8px;
 }
 
-.modal-container select,
-.modal-container input[type="number"] {
+.modal select,
+.modal input[type="number"] {
     width: 100%;
     padding: 8px;
     border: 1px solid var(--background-modifier-border);
@@ -1032,8 +1019,8 @@ button.mod-cta:hover {
     font-size: 0.9em;
 }
 
-.modal-container select:focus,
-.modal-container input[type="number"]:focus {
+.modal select:focus,
+.modal input[type="number"]:focus {
     outline: none;
     border-color: var(--interactive-accent);
 }
