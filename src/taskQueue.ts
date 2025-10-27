@@ -1,5 +1,5 @@
 import { ProcessTask, TaskStatus, ProgressCallback } from './types';
-import { Notice } from 'obsidian';
+import { Notice, setIcon } from 'obsidian';
 
 /**
  * 任务队列管理器
@@ -209,6 +209,7 @@ export class TaskQueue {
 export class StatusBarManager {
 	private statusBarItem: HTMLElement | null;
 	private currentTaskId: string | null;
+	private iconContainer: HTMLElement | null = null;
 
 	constructor(statusBarItem: HTMLElement) {
 		this.statusBarItem = statusBarItem;
@@ -223,18 +224,37 @@ export class StatusBarManager {
 
 		this.currentTaskId = taskId;
 
-		const queue = new TaskQueue();
-		const icon = queue.getStatusIcon(status);
+		// 清空之前的内容
+		this.statusBarItem.empty();
 
-		// 如果有自定义消息,显示消息 + 百分比
-		// 否则只显示图标 + 百分比
-		const displayMessage = message
-			? `${icon} ${Math.round(progress)}% - ${message}`
-			: (status === TaskStatus.COMPLETED
-				? '✅'
-				: `${icon} ${Math.round(progress)}%`);
+		// 判断是否需要显示旋转图标
+		const isProcessing = status === TaskStatus.GENERATING ||
+		                     status === TaskStatus.PARSING ||
+		                     status === TaskStatus.PROCESSING_IMAGES ||
+		                     status === TaskStatus.PROCESSING_LINKS ||
+		                     status === TaskStatus.PENDING;
 
-		this.statusBarItem.setText(displayMessage);
+		if (isProcessing && message) {
+			// 创建图标容器并添加旋转动画
+			this.iconContainer = this.statusBarItem.createSpan({ cls: 'status-bar-spinner' });
+			setIcon(this.iconContainer, 'loader');
+
+			// 添加消息文本
+			this.statusBarItem.createSpan({ text: ` ${message}` });
+		} else {
+			// 使用旧的 emoji 图标方式
+			const queue = new TaskQueue();
+			const icon = queue.getStatusIcon(status);
+
+			const displayMessage = message
+				? `${icon} ${Math.round(progress)}% - ${message}`
+				: (status === TaskStatus.COMPLETED
+					? '✅'
+					: `${icon} ${Math.round(progress)}%`);
+
+			this.statusBarItem.setText(displayMessage);
+		}
+
 		this.statusBarItem.style.display = 'inline-block';
 	}
 

@@ -809,18 +809,31 @@ export class CombineNotesView extends ItemView {
 				return; // 用户取消
 			}
 
-			new Notice('正在生成Quiz，请稍候...');
+			// 显示状态栏进度（带旋转动画）
+			const { TaskStatus } = await import('../types');
+			this.plugin.statusBarManager.showTaskStatus(
+				'quiz-generation',
+				TaskStatus.GENERATING,
+				0,
+				'试题生成中'
+			);
 
 			// 使用QuizGenerator生成Quiz
 			const { QuizGenerator } = await import('../processors/quizGenerator');
 			const generator = new QuizGenerator(this.plugin.app, this.plugin);
 			const quizFile = await generator.generateQuizFromFile(sourceFile, options);
 
+			// 隐藏状态栏
+			this.plugin.statusBarManager.hide();
+
 			new Notice(`Quiz生成成功：${quizFile.basename}`);
 
 			// 刷新视图
 			this.render();
 		} catch (error) {
+			// 隐藏状态栏
+			this.plugin.statusBarManager.hide();
+
 			console.error('生成Quiz失败:', error);
 			new Notice(`生成Quiz失败: ${error.message}`);
 		}
@@ -1088,7 +1101,14 @@ export class CombineNotesView extends ItemView {
 		}
 
 		try {
-			new Notice('正在评分，请稍候...');
+			// 显示状态栏进度（带旋转动画）
+			const { TaskStatus } = await import('../types');
+			this.plugin.statusBarManager.showTaskStatus(
+				'quiz-grading',
+				TaskStatus.GENERATING,
+				0,
+				'评分中'
+			);
 
 			// 使用QuizGrader评分
 			const { QuizGrader } = await import('../processors/grading');
@@ -1107,6 +1127,9 @@ export class CombineNotesView extends ItemView {
 			// 更新quiz文件的quiz_results字段
 			await this.updateQuizFileResults(this.currentQuizFile, resultFile);
 
+			// 隐藏状态栏
+			this.plugin.statusBarManager.hide();
+
 			// 保存结果并切换到结果视图
 			this.currentQuizResults = results;
 			this.currentResultFile = resultFile;
@@ -1115,6 +1138,9 @@ export class CombineNotesView extends ItemView {
 
 			new Notice('评分完成！');
 		} catch (error) {
+			// 隐藏状态栏
+			this.plugin.statusBarManager.hide();
+
 			console.error('提交答卷失败:', error);
 			new Notice(`提交答卷失败: ${error.message}`);
 		}
@@ -1349,15 +1375,23 @@ export class CombineNotesView extends ItemView {
 				for (let i = 0; i < lines.length; i++) {
 					if (lines[i].trim().startsWith('quiz_results:')) {
 						resultsIndex = i;
-						// 找到下一个不是列表项的行
-						for (let j = i + 1; j < lines.length; j++) {
-							if (!lines[j].trim().startsWith('-')) {
-								insertIndex = j;
-								break;
+
+						// 检查是否是 quiz_results: [] 的格式
+						if (lines[i].includes('[]')) {
+							// 替换整行为数组格式的开头
+							lines[i] = 'quiz_results:';
+							insertIndex = i + 1;
+						} else {
+							// 找到下一个不是列表项的行
+							for (let j = i + 1; j < lines.length; j++) {
+								if (!lines[j].trim().startsWith('-')) {
+									insertIndex = j;
+									break;
+								}
 							}
-						}
-						if (insertIndex === -1) {
-							insertIndex = lines.length;
+							if (insertIndex === -1) {
+								insertIndex = lines.length;
+							}
 						}
 						break;
 					}
