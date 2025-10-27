@@ -1059,6 +1059,7 @@ button.mod-cta:hover {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    position: relative;
 }
 
 /* 内容区域 */
@@ -1066,13 +1067,13 @@ button.mod-cta:hover {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-bottom: 60px; /* 为底部导航栏留空间 */
+    padding-bottom: 80px; /* 为底部导航栏和状态栏留空间 */
 }
 
 /* ===== 底部导航栏 ===== */
 .bottom-navigation {
-    position: fixed;
-    bottom: 0;
+    position: absolute;
+    bottom: 20px;
     left: 0;
     right: 0;
     display: flex;
