@@ -1050,3 +1050,568 @@ button.mod-cta:hover {
     margin-right: 6px;
     cursor: pointer;
 }
+
+/* ==================== 新UI架构样式 ==================== */
+
+/* 视图容器 */
+.notebook-llm-view-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* 内容区域 */
+.view-content-area {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 60px; /* 为底部导航栏留空间 */
+}
+
+/* ===== 底部导航栏 ===== */
+.bottom-navigation {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    background: var(--background-primary);
+    border-top: 1px solid var(--background-modifier-border);
+    padding: 8px 0 4px;
+    z-index: 100;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 4px;
+    transition: all 0.2s;
+    border-radius: 4px;
+    margin: 0 4px;
+}
+
+.nav-item:hover {
+    background: var(--background-modifier-hover);
+}
+
+.nav-item.active {
+    color: var(--interactive-accent);
+}
+
+.nav-item.active .nav-icon svg {
+    stroke: var(--interactive-accent);
+}
+
+.nav-icon {
+    margin-bottom: 2px;
+}
+
+.nav-label {
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+/* ===== 通用页面样式 ===== */
+.page-title {
+    font-size: 1.5em;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+    color: var(--text-normal);
+}
+
+.page-subtitle {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin: 0 0 20px 0;
+}
+
+.section-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin: 20px 0 12px 0;
+    color: var(--text-normal);
+}
+
+.subsection-title {
+    font-size: 1em;
+    font-weight: 500;
+    margin: 16px 0 8px 0;
+    color: var(--text-normal);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+
+/* ===== 主页样式 ===== */
+.home-page {
+    padding: 20px;
+}
+
+.page-header {
+    margin-bottom: 24px;
+}
+
+/* 数据看板 */
+.dashboard-section {
+    margin-bottom: 24px;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.dashboard-card {
+    background: var(--background-secondary);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.dashboard-card.disabled {
+    opacity: 0.5;
+}
+
+.dashboard-card .card-icon {
+    font-size: 2em;
+    margin-bottom: 8px;
+}
+
+.dashboard-card .card-value {
+    font-size: 1.8em;
+    font-weight: 700;
+    color: var(--text-normal);
+    margin-bottom: 4px;
+}
+
+.dashboard-card .card-label {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+/* 快捷开始 */
+.quick-start-section {
+    margin-bottom: 24px;
+}
+
+.quick-start-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.quick-start-btn {
+    flex: 1;
+    padding: 16px;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.95em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-start-btn.primary {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.quick-start-btn.primary:hover {
+    background: var(--interactive-accent-hover);
+}
+
+.quick-start-btn.secondary {
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.quick-start-btn.secondary:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* 最近情况 */
+.recent-section {
+    margin-bottom: 24px;
+}
+
+/* 日历热力图 */
+.activity-calendar {
+    margin-bottom: 20px;
+}
+
+.calendar-heatmap {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12px, 1fr));
+    gap: 3px;
+    max-width: 100%;
+}
+
+.calendar-day {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.calendar-day.intensity-1 {
+    background: var(--color-green);
+    opacity: 0.25;
+}
+
+.calendar-day.intensity-2 {
+    background: var(--color-green);
+    opacity: 0.5;
+}
+
+.calendar-day.intensity-3 {
+    background: var(--color-green);
+    opacity: 0.75;
+}
+
+.calendar-day.intensity-4 {
+    background: var(--color-green);
+    opacity: 1;
+}
+
+/* 活动列表 */
+.activity-list {
+    margin-bottom: 20px;
+}
+
+.activity-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: var(--background-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--background-modifier-border);
+    transition: all 0.2s;
+}
+
+.activity-item.clickable {
+    cursor: pointer;
+}
+
+.activity-item.clickable:hover {
+    background: var(--background-modifier-hover);
+    transform: translateX(2px);
+}
+
+.activity-icon {
+    font-size: 1.5em;
+    margin-right: 12px;
+}
+
+.activity-content {
+    flex: 1;
+}
+
+.activity-title {
+    font-weight: 500;
+    color: var(--text-normal);
+    margin-bottom: 2px;
+}
+
+.activity-meta {
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.activity-time {
+    font-size: 0.8em;
+    color: var(--text-faint);
+}
+
+/* ===== 整理页样式 ===== */
+.organize-page {
+    padding: 20px;
+}
+
+.page-header-section {
+    margin-bottom: 20px;
+}
+
+/* ===== 学习中心样式 ===== */
+.learning-page {
+    padding: 20px;
+}
+
+/* 学习中心入口 */
+.learning-hub {
+    padding: 20px;
+}
+
+.learning-options {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.learning-card {
+    background: var(--background-secondary);
+    border: 2px solid var(--background-modifier-border);
+    border-radius: 12px;
+    padding: 24px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.learning-card:hover {
+    border-color: var(--interactive-accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.learning-card.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.learning-card.disabled:hover {
+    transform: none;
+    border-color: var(--background-modifier-border);
+    box-shadow: none;
+}
+
+.card-icon-large {
+    font-size: 3em;
+    margin-bottom: 12px;
+}
+
+.learning-card h3 {
+    font-size: 1.2em;
+    margin: 0 0 8px 0;
+    color: var(--text-normal);
+}
+
+.learning-card p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.badge-construction {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: var(--color-orange);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+/* Quiz列表页 */
+.quiz-list-page {
+    padding: 0;
+}
+
+.page-header-with-back {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    position: sticky;
+    top: 0;
+    background: var(--background-primary);
+    z-index: 10;
+}
+
+.back-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    margin-right: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.back-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+.quiz-cards-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.quiz-card {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 16px;
+    transition: all 0.2s;
+}
+
+.quiz-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.quiz-card-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--text-normal);
+}
+
+.quiz-card-meta {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.difficulty-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.difficulty-badge.简单 {
+    background: var(--color-green);
+    color: white;
+}
+
+.difficulty-badge.中等 {
+    background: var(--color-orange);
+    color: white;
+}
+
+.difficulty-badge.困难 {
+    background: var(--color-red);
+    color: white;
+}
+
+.question-count {
+    padding: 4px 12px;
+    background: var(--background-primary);
+    border-radius: 12px;
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+.completed-badge {
+    padding: 4px 12px;
+    background: var(--color-green);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.quiz-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.quiz-action-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.2s;
+}
+
+.quiz-action-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+.quiz-action-btn.primary {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+
+.quiz-action-btn.primary:hover {
+    background: var(--interactive-accent-hover);
+}
+
+/* ===== "我的"页面样式 ===== */
+.profile-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+}
+
+.under-construction {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.construction-icon {
+    font-size: 4em;
+    margin-bottom: 20px;
+    opacity: 0.6;
+}
+
+.under-construction h2 {
+    font-size: 1.5em;
+    margin: 0 0 12px 0;
+    color: var(--text-normal);
+}
+
+.construction-message {
+    color: var(--text-muted);
+    font-size: 0.95em;
+}
+
+/* ===== 响应式设计 ===== */
+@media (max-width: 768px) {
+    .view-content-area {
+        padding-bottom: 70px;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .quick-start-buttons {
+        flex-direction: column;
+    }
+
+    .learning-options {
+        gap: 12px;
+    }
+}
