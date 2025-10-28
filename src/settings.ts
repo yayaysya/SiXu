@@ -130,10 +130,10 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 
 		// 3. API 密钥（带文档链接）
 		const docUrls = {
-			[AIProvider.ZHIPU]: 'https://open.bigmodel.cn/',
-			[AIProvider.OPENAI]: 'https://platform.openai.com/',
-			[AIProvider.DEEPSEEK]: 'https://platform.deepseek.com/',
-			[AIProvider.GEMINI]: 'https://ai.google.dev/'
+			[AIProvider.ZHIPU]: 'https://openai.com/zh-Hans-CN/api/',
+			[AIProvider.OPENAI]: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
+			[AIProvider.DEEPSEEK]: 'https://platform.deepseek.com/usage',
+			[AIProvider.GEMINI]: 'https://aistudio.google.com/api-keys'
 		};
 
 		new Setting(containerEl)

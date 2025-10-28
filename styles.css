@@ -11,9 +11,16 @@
 }
 
 /* 状态栏加载图标旋转效果 */
+.status-bar-spinner {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
 .status-bar-spinner svg {
     animation: spinner-rotate 1s linear infinite;
     display: inline-block;
+    vertical-align: middle;
 }
 
 /* 设置面板样式 */
