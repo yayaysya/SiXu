@@ -27,6 +27,29 @@ type TabType = 'combine' | 'sources' | 'quiz';
  */
 type QuizViewState = 'list' | 'exam' | 'result';
 
+/**
+ * 整理页面视图状态
+ */
+type OrganizeViewState = 'list' | 'search';
+
+/**
+ * 筛选条件
+ */
+interface FilterConditions {
+	folders: string[];
+	dateRange: { start: Date | null; end: Date | null } | null;
+	tags: string[];
+	keyword: string;
+}
+
+/**
+ * 搜索结果笔记项
+ */
+interface SearchNoteItem {
+	file: TFile;
+	matchScore: number;
+}
+
 export class CombineNotesView extends ItemView {
 	plugin: NotebookLLMPlugin;
 	private draggedIndex: number | null = null;
@@ -57,6 +80,20 @@ export class CombineNotesView extends ItemView {
 	// 进度卡片相关状态
 	private progressCard: ProgressCard | null = null;
 	private isCancelled: boolean = false;
+
+	// 整理页面搜索相关状态
+	private organizeViewState: OrganizeViewState = 'list';
+	private selectedNotePaths: Set<string> = new Set();
+	private searchKeyword: string = '';
+	private searchResults: SearchNoteItem[] = [];
+	private filterConditions: FilterConditions = {
+		folders: [],
+		dateRange: null,
+		tags: [],
+		keyword: ''
+	};
+	private showFilterDrawer: boolean = false;
+	private searchDebounceTimer: number | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: NotebookLLMPlugin) {
 		super(leaf);
@@ -1813,13 +1850,732 @@ export class CombineNotesView extends ItemView {
 		container.empty();
 		container.addClass('organize-page');
 
+		// 根据状态渲染不同内容
+		if (this.organizeViewState === 'search') {
+			this.renderOrganizeSearchPage(container);
+		} else {
+			this.renderOrganizeListPage(container);
+		}
+	}
+
+	/**
+	 * 渲染整理列表页面（主界面）
+	 */
+	private renderOrganizeListPage(container: HTMLElement): void {
 		// 页面标题
 		const header = container.createDiv({ cls: 'page-header-section' });
 		header.createEl('h2', { text: '思维整理', cls: 'page-title' });
 		header.createEl('p', { text: '把多个笔记重新整合', cls: 'page-subtitle' });
 
+		// 搜索框入口
+		const searchBoxContainer = container.createDiv({ cls: 'organize-search-entry' });
+		const searchBox = searchBoxContainer.createDiv({ cls: 'organize-search-box' });
+
+		// 搜索框内容
+		const searchText = searchBox.createSpan({ cls: 'search-placeholder', text: '搜索笔记' });
+
+		// 图标容器
+		const iconsContainer = searchBox.createDiv({ cls: 'search-icons' });
+		const searchIcon = iconsContainer.createDiv({ cls: 'search-icon' });
+		setIcon(searchIcon, 'search');
+		const filterIcon = iconsContainer.createDiv({ cls: 'filter-icon' });
+		setIcon(filterIcon, 'filter');
+
+		// 点击搜索框进入搜索页面
+		searchBox.addEventListener('click', () => {
+			this.enterSearchMode();
+		});
+
 		// 复用原来的合并笔记Tab的内容
 		this.renderCombineTab(container);
+	}
+
+	/**
+	 * 进入搜索模式
+	 */
+	private enterSearchMode(): void {
+		this.organizeViewState = 'search';
+		this.searchKeyword = '';
+		this.selectedNotePaths.clear();
+		this.searchResults = [];
+		this.render();
+	}
+
+	/**
+	 * 退出搜索模式，返回列表
+	 */
+	private exitSearchMode(): void {
+		this.organizeViewState = 'list';
+		this.render();
+	}
+
+	/**
+	 * 渲染搜索/选择页面
+	 */
+	private renderOrganizeSearchPage(container: HTMLElement): void {
+		container.addClass('organize-search-page');
+
+		// 顶栏
+		const topBar = container.createDiv({ cls: 'search-top-bar' });
+
+		// 返回按钮
+		const backBtn = topBar.createEl('button', { cls: 'search-back-btn' });
+		setIcon(backBtn, 'arrow-left');
+		backBtn.addEventListener('click', () => {
+			this.exitSearchMode();
+		});
+
+		// 搜索输入框
+		const searchInputWrapper = topBar.createDiv({ cls: 'search-input-wrapper' });
+		const searchInput = searchInputWrapper.createEl('input', {
+			cls: 'search-input',
+			type: 'text',
+			placeholder: '搜索笔记...'
+		});
+		searchInput.value = this.searchKeyword;
+
+		// 筛选按钮
+		const filterBtn = topBar.createEl('button', {
+			cls: this.showFilterDrawer ? 'search-filter-btn active' : 'search-filter-btn'
+		});
+		setIcon(filterBtn, 'filter');
+		filterBtn.addEventListener('click', (e) => {
+			e.stopPropagation(); // 防止事件冒泡
+			this.showFilterDrawer = !this.showFilterDrawer;
+			this.render();
+		});
+
+		// 搜索输入事件（实时搜索with debounce）
+		searchInput.addEventListener('input', () => {
+			this.searchKeyword = searchInput.value;
+			this.debouncedSearch();
+		});
+
+		// 筛选标签区域
+		if (this.hasActiveFilters()) {
+			this.renderFilterTags(container);
+		}
+
+		// 筛选抽屉
+		if (this.showFilterDrawer) {
+			this.renderFilterDrawer(container);
+		}
+
+		// 搜索结果列表
+		const resultsContainer = container.createDiv({ cls: 'search-results-container' });
+		this.renderSearchResults(resultsContainer);
+
+		// 底部确认按钮
+		const bottomBar = container.createDiv({ cls: 'search-bottom-bar' });
+		const confirmBtn = bottomBar.createEl('button', {
+			cls: 'search-confirm-btn mod-cta',
+			text: `确认添加 (${this.selectedNotePaths.size})`
+		});
+		confirmBtn.disabled = this.selectedNotePaths.size === 0;
+		confirmBtn.addEventListener('click', () => {
+			this.confirmAddNotes();
+		});
+
+		// 自动聚焦搜索框
+		setTimeout(() => searchInput.focus(), 100);
+	}
+
+	/**
+	 * 检查是否有活动的筛选条件
+	 */
+	private hasActiveFilters(): boolean {
+		return this.filterConditions.folders.length > 0 ||
+			this.filterConditions.dateRange !== null ||
+			this.filterConditions.tags.length > 0 ||
+			this.filterConditions.keyword.length > 0;
+	}
+
+	/**
+	 * 渲染筛选标签
+	 */
+	private renderFilterTags(container: HTMLElement): void {
+		const tagsContainer = container.createDiv({ cls: 'filter-tags-container' });
+
+		// 文件夹标签
+		this.filterConditions.folders.forEach(folder => {
+			const tag = tagsContainer.createDiv({ cls: 'filter-tag' });
+			tag.createSpan({ cls: 'filter-tag-icon', text: '📁' });
+			tag.createSpan({ cls: 'filter-tag-text', text: folder });
+			const removeBtn = tag.createSpan({ cls: 'filter-tag-remove', text: '×' });
+			removeBtn.addEventListener('click', (e) => {
+				console.log('删除文件夹筛选标签被点击:', folder);
+				e.stopPropagation();
+				this.removeFilterFolder(folder);
+			});
+		});
+
+		// 日期范围标签
+		if (this.filterConditions.dateRange) {
+			const tag = tagsContainer.createDiv({ cls: 'filter-tag' });
+			tag.createSpan({ cls: 'filter-tag-icon', text: '📅' });
+			const dateText = this.formatDateRange(this.filterConditions.dateRange);
+			tag.createSpan({ cls: 'filter-tag-text', text: dateText });
+			const removeBtn = tag.createSpan({ cls: 'filter-tag-remove', text: '×' });
+			removeBtn.addEventListener('click', (e) => {
+				console.log('删除日期筛选标签被点击');
+				e.stopPropagation();
+				this.filterConditions.dateRange = null;
+				this.applyFilters();
+			});
+		}
+
+		// 标签标签
+		this.filterConditions.tags.forEach(tagName => {
+			const tag = tagsContainer.createDiv({ cls: 'filter-tag' });
+			tag.createSpan({ cls: 'filter-tag-icon', text: '#' });
+			tag.createSpan({ cls: 'filter-tag-text', text: tagName });
+			const removeBtn = tag.createSpan({ cls: 'filter-tag-remove', text: '×' });
+			removeBtn.addEventListener('click', (e) => {
+				console.log('删除标签筛选标签被点击:', tagName);
+				e.stopPropagation();
+				this.removeFilterTag(tagName);
+			});
+		});
+	}
+
+	/**
+	 * 格式化日期范围显示
+	 */
+	private formatDateRange(range: { start: Date | null; end: Date | null }): string {
+		const format = (date: Date | null) => date ? date.toISOString().split('T')[0] : '';
+		if (range.start && range.end) {
+			return `${format(range.start)} - ${format(range.end)}`;
+		} else if (range.start) {
+			return `从 ${format(range.start)}`;
+		} else if (range.end) {
+			return `到 ${format(range.end)}`;
+		}
+		return '';
+	}
+
+	/**
+	 * 移除筛选文件夹
+	 */
+	private removeFilterFolder(folder: string): void {
+		this.filterConditions.folders = this.filterConditions.folders.filter(f => f !== folder);
+		this.applyFilters();
+	}
+
+	/**
+	 * 移除筛选标签
+	 */
+	private removeFilterTag(tag: string): void {
+		this.filterConditions.tags = this.filterConditions.tags.filter(t => t !== tag);
+		this.applyFilters();
+	}
+
+	/**
+	 * 防抖搜索
+	 */
+	private debouncedSearch(): void {
+		if (this.searchDebounceTimer !== null) {
+			window.clearTimeout(this.searchDebounceTimer);
+		}
+		this.searchDebounceTimer = window.setTimeout(() => {
+			this.performSearch();
+		}, 300);
+	}
+
+	/**
+	 * 执行搜索
+	 */
+	private async performSearch(): Promise<void> {
+		const keyword = this.searchKeyword.trim().toLowerCase();
+		const results: SearchNoteItem[] = [];
+
+		// 获取所有markdown文件
+		const allFiles = this.app.vault.getMarkdownFiles();
+
+		for (const file of allFiles) {
+			// 应用筛选条件
+			if (!this.fileMatchesFilters(file)) {
+				continue;
+			}
+
+			// 如果有关键词，计算匹配分数
+			let matchScore = 0;
+			if (keyword) {
+				// 文件名匹配
+				if (file.basename.toLowerCase().includes(keyword)) {
+					matchScore += 10;
+				}
+
+				// 路径匹配
+				if (file.path.toLowerCase().includes(keyword)) {
+					matchScore += 5;
+				}
+
+				// 内容匹配（读取文件前100行）
+				try {
+					const content = await this.app.vault.read(file);
+					const lines = content.split('\n').slice(0, 100).join('\n').toLowerCase();
+					if (lines.includes(keyword)) {
+						matchScore += 3;
+					}
+				} catch (error) {
+					// 忽略读取错误
+				}
+
+				// 标签匹配
+				const cache = this.app.metadataCache.getFileCache(file);
+				const tags = cache?.frontmatter?.tags || [];
+				if (Array.isArray(tags)) {
+					for (const tag of tags) {
+						if (tag.toLowerCase().includes(keyword)) {
+							matchScore += 7;
+							break;
+						}
+					}
+				}
+			} else {
+				// 无关键词时，按修改时间排序
+				matchScore = file.stat.mtime;
+			}
+
+			if (matchScore > 0 || !keyword) {
+				results.push({ file, matchScore });
+			}
+		}
+
+		// 排序：按匹配分数降序，分数相同则按修改时间降序
+		results.sort((a, b) => {
+			if (b.matchScore !== a.matchScore) {
+				return b.matchScore - a.matchScore;
+			}
+			return b.file.stat.mtime - a.file.stat.mtime;
+		});
+
+		this.searchResults = results;
+		this.render();
+	}
+
+	/**
+	 * 检查文件是否匹配筛选条件
+	 */
+	private fileMatchesFilters(file: TFile): boolean {
+		const filters = this.filterConditions;
+
+		// 文件夹筛选
+		if (filters.folders.length > 0) {
+			const fileFolder = file.parent?.path || '';
+			const matchesFolder = filters.folders.some(folder => 
+				fileFolder === folder || fileFolder.startsWith(folder + '/')
+			);
+			if (!matchesFolder) {
+				return false;
+			}
+		}
+
+		// 日期范围筛选
+		if (filters.dateRange) {
+			const fileTime = file.stat.mtime;
+			if (filters.dateRange.start && fileTime < filters.dateRange.start.getTime()) {
+				return false;
+			}
+			if (filters.dateRange.end && fileTime > filters.dateRange.end.getTime()) {
+				return false;
+			}
+		}
+
+		// 标签筛选
+		if (filters.tags.length > 0) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const fileTags = cache?.frontmatter?.tags || [];
+			const hasMatchingTag = filters.tags.some(tag => 
+				Array.isArray(fileTags) && fileTags.includes(tag)
+			);
+			if (!hasMatchingTag) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * 应用筛选条件
+	 */
+	private applyFilters(): void {
+		this.performSearch();
+	}
+
+	/**
+	 * 渲染筛选抽屉
+	 */
+	private renderFilterDrawer(container: HTMLElement): void {
+		console.log('=== renderFilterDrawer 被调用 ===');
+		const drawer = container.createDiv({ cls: 'filter-drawer' });
+		console.log('筛选抽屉已创建，元素:', drawer);
+
+		// 阻止drawer内的点击事件冒泡到搜索结果
+		drawer.addEventListener('click', (e) => {
+			console.log('筛选抽屉内被点击了，event:', e.target);
+			e.stopPropagation();
+		});
+
+		// 文件夹选择
+		const folderSection = drawer.createDiv({ cls: 'filter-section' });
+		folderSection.createEl('h4', { text: '文件夹', cls: 'filter-section-title' });
+		
+		// 文件夹搜索输入框
+		const folderSearchInput = folderSection.createEl('input', {
+			type: 'text',
+			cls: 'filter-search-input',
+			placeholder: '搜索文件夹...'
+		});
+
+		// 获取所有文件夹
+		const folders = new Set<string>();
+		this.app.vault.getAllLoadedFiles().forEach(file => {
+			if (file instanceof TFile && file.parent) {
+				let current: typeof file.parent | null = file.parent;
+				while (current && current.path !== '/') {
+					folders.add(current.path);
+					current = current.parent;
+				}
+			}
+		});
+
+		const folderList = folderSection.createDiv({ cls: 'filter-options' });
+		const allFolders = Array.from(folders).sort();
+
+		// 渲染文件夹列表的函数
+		const renderFolderOptions = (filterText: string) => {
+			folderList.empty();
+			const filteredFolders = filterText 
+				? allFolders.filter(f => f.toLowerCase().includes(filterText.toLowerCase()))
+				: allFolders;
+
+			if (filteredFolders.length === 0) {
+				folderList.createDiv({ cls: 'filter-empty', text: '无匹配的文件夹' });
+				return;
+			}
+
+			filteredFolders.forEach(folder => {
+				const option = folderList.createEl('label', { cls: 'filter-option' });
+				const checkbox = option.createEl('input', { type: 'checkbox' });
+				checkbox.checked = this.filterConditions.folders.includes(folder);
+				checkbox.addEventListener('change', (e) => {
+					console.log('文件夹 checkbox 被点击:', folder, 'checked:', checkbox.checked);
+					e.stopPropagation();
+					if (checkbox.checked) {
+						this.filterConditions.folders.push(folder);
+					} else {
+						this.filterConditions.folders = this.filterConditions.folders.filter(f => f !== folder);
+					}
+					this.applyFilters();
+				});
+				option.createSpan({ text: folder || '根目录' });
+			});
+		};
+
+		// 初始渲染
+		renderFolderOptions('');
+
+		// 搜索事件
+		folderSearchInput.addEventListener('input', (e) => {
+			console.log('文件夹搜索输入:', folderSearchInput.value);
+			e.stopPropagation();
+			renderFolderOptions(folderSearchInput.value);
+		});
+
+		// 日期范围选择
+		const dateSection = drawer.createDiv({ cls: 'filter-section' });
+		dateSection.createEl('h4', { text: '日期范围', cls: 'filter-section-title' });
+
+		// 快捷选项
+		const quickOptions = dateSection.createDiv({ cls: 'filter-quick-options' });
+		const quickDates = [
+			{ label: '最近5天', days: 5 },
+			{ label: '最近30天', days: 30 },
+			{ label: '最近3个月', days: 90 }
+		];
+
+		quickDates.forEach(({ label, days }) => {
+			const btn = quickOptions.createEl('button', { text: label, cls: 'filter-quick-btn' });
+			btn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const now = new Date();
+				const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+				this.filterConditions.dateRange = { start, end: now };
+				this.applyFilters();
+			});
+		});
+
+		// 自定义日期
+		const customDate = dateSection.createDiv({ cls: 'filter-custom-date' });
+		customDate.createSpan({ text: '开始日期:' });
+		const startInput = customDate.createEl('input', { type: 'date', cls: 'date-input' });
+		if (this.filterConditions.dateRange?.start) {
+			startInput.value = this.filterConditions.dateRange.start.toISOString().split('T')[0];
+		}
+		startInput.addEventListener('change', (e) => {
+			e.stopPropagation();
+			const start = startInput.value ? new Date(startInput.value) : null;
+			this.filterConditions.dateRange = {
+				start,
+				end: this.filterConditions.dateRange?.end || null
+			};
+			this.applyFilters();
+		});
+
+		customDate.createSpan({ text: '结束日期:' });
+		const endInput = customDate.createEl('input', { type: 'date', cls: 'date-input' });
+		if (this.filterConditions.dateRange?.end) {
+			endInput.value = this.filterConditions.dateRange.end.toISOString().split('T')[0];
+		}
+		endInput.addEventListener('change', (e) => {
+			e.stopPropagation();
+			const end = endInput.value ? new Date(endInput.value) : null;
+			this.filterConditions.dateRange = {
+				start: this.filterConditions.dateRange?.start || null,
+				end
+			};
+			this.applyFilters();
+		});
+
+		// 标签选择
+		const tagSection = drawer.createDiv({ cls: 'filter-section' });
+		tagSection.createEl('h4', { text: '标签', cls: 'filter-section-title' });
+
+		// 标签搜索输入框
+		const tagSearchInput = tagSection.createEl('input', {
+			type: 'text',
+			cls: 'filter-search-input',
+			placeholder: '搜索标签...'
+		});
+
+		// 收集所有标签
+		const allTags = new Set<string>();
+		this.app.vault.getMarkdownFiles().forEach(file => {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const tags = cache?.frontmatter?.tags || [];
+			if (Array.isArray(tags)) {
+				tags.forEach(tag => allTags.add(tag));
+			}
+		});
+
+		const tagList = tagSection.createDiv({ cls: 'filter-options' });
+		const allTagsArray = Array.from(allTags).sort();
+
+		// 渲染标签列表的函数
+		const renderTagOptions = (filterText: string) => {
+			tagList.empty();
+			const filteredTags = filterText 
+				? allTagsArray.filter(t => t.toLowerCase().includes(filterText.toLowerCase()))
+				: allTagsArray;
+
+			if (filteredTags.length === 0) {
+				tagList.createDiv({ cls: 'filter-empty', text: '无匹配的标签' });
+				return;
+			}
+
+			filteredTags.forEach(tag => {
+				const option = tagList.createEl('label', { cls: 'filter-option' });
+				const checkbox = option.createEl('input', { type: 'checkbox' });
+				checkbox.checked = this.filterConditions.tags.includes(tag);
+				checkbox.addEventListener('change', (e) => {
+					console.log('标签 checkbox 被点击:', tag, 'checked:', checkbox.checked);
+					e.stopPropagation();
+					if (checkbox.checked) {
+						this.filterConditions.tags.push(tag);
+					} else {
+						this.filterConditions.tags = this.filterConditions.tags.filter(t => t !== tag);
+					}
+					this.applyFilters();
+				});
+				option.createSpan({ text: `#${tag}` });
+			});
+		};
+
+		// 初始渲染
+		renderTagOptions('');
+
+		// 搜索事件
+		tagSearchInput.addEventListener('input', (e) => {
+			console.log('标签搜索输入:', tagSearchInput.value);
+			e.stopPropagation();
+			renderTagOptions(tagSearchInput.value);
+		});
+
+		// 关键词筛选
+		const keywordSection = drawer.createDiv({ cls: 'filter-section' });
+		keywordSection.createEl('h4', { text: '额外关键词', cls: 'filter-section-title' });
+		const keywordInput = keywordSection.createEl('input', {
+			type: 'text',
+			cls: 'filter-keyword-input',
+			placeholder: '输入关键词...'
+		});
+		keywordInput.value = this.filterConditions.keyword;
+		keywordInput.addEventListener('input', (e) => {
+			e.stopPropagation();
+			this.filterConditions.keyword = keywordInput.value;
+		});
+		keywordInput.addEventListener('click', (e) => {
+			e.stopPropagation();
+		});
+	}
+
+	/**
+	 * 渲染搜索结果列表
+	 */
+	private async renderSearchResults(container: HTMLElement): Promise<void> {
+		if (this.searchResults.length === 0 && this.searchKeyword.trim()) {
+			container.createDiv({ cls: 'empty-state', text: '没有找到匹配的笔记' });
+			return;
+		}
+
+		if (this.searchResults.length === 0 && !this.searchKeyword.trim()) {
+			container.createDiv({ cls: 'empty-state', text: '输入关键词开始搜索' });
+			return;
+		}
+
+		const list = container.createDiv({ cls: 'search-results-list' });
+
+		for (const result of this.searchResults) {
+			const file = result.file;
+			const isSelected = this.selectedNotePaths.has(file.path);
+
+			const item = list.createDiv({ cls: isSelected ? 'search-result-item selected' : 'search-result-item' });
+
+			// 左侧内容区
+			const content = item.createDiv({ cls: 'result-content' });
+
+			// 文件夹路径
+			const folder = content.createDiv({ cls: 'result-folder' });
+			folder.setText(file.parent?.path || '根目录');
+
+			// 文件名
+			const name = content.createDiv({ cls: 'result-name' });
+			name.setText(file.basename);
+
+			// 元信息行
+			const meta = content.createDiv({ cls: 'result-meta' });
+
+			// 日期
+			const date = new Date(file.stat.mtime);
+			const dateStr = date.toLocaleDateString();
+			meta.createSpan({ cls: 'result-date', text: dateStr });
+
+			// 标签
+			const cache = this.app.metadataCache.getFileCache(file);
+			const tags = cache?.frontmatter?.tags || [];
+			if (Array.isArray(tags) && tags.length > 0) {
+				const tagContainer = meta.createSpan({ cls: 'result-tags' });
+				tags.slice(0, 3).forEach(tag => {
+					tagContainer.createSpan({ cls: 'result-tag', text: `#${tag}` });
+				});
+				if (tags.length > 3) {
+					tagContainer.createSpan({ cls: 'result-tag-more', text: `+${tags.length - 3}` });
+				}
+			}
+
+			// 预览
+			try {
+				const fileContent = await this.app.vault.read(file);
+				const preview = this.getContentPreview(fileContent);
+				if (preview) {
+					const previewEl = content.createDiv({ cls: 'result-preview' });
+					previewEl.setText(preview);
+				}
+			} catch (error) {
+				// 忽略读取错误
+			}
+
+			// 右侧按钮
+			const actionBtn = item.createDiv({ cls: isSelected ? 'result-action selected' : 'result-action' });
+			actionBtn.setText(isSelected ? '✓' : '➕');
+
+			// 点击整个项目切换选择状态
+			item.addEventListener('click', () => {
+				this.toggleNoteSelection(file.path);
+			});
+		}
+	}
+
+	/**
+	 * 获取文件预览文本（从文件内容生成）
+	 */
+	private getContentPreview(content: string): string {
+		// 移除YAML
+		let text = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+
+		// 移除Markdown标记
+		text = text
+			.replace(/^#+\s+/gm, '')
+			.replace(/\*\*(.+?)\*\*/g, '$1')
+			.replace(/\*(.+?)\*/g, '$1')
+			.replace(/`(.+?)`/g, '$1')
+			.trim();
+
+		// 取前100个字符
+		if (text.length > 100) {
+			return text.substring(0, 100) + '...';
+		}
+		return text;
+	}
+
+	/**
+	 * 切换笔记选择状态
+	 */
+	private toggleNoteSelection(filePath: string): void {
+		if (this.selectedNotePaths.has(filePath)) {
+			this.selectedNotePaths.delete(filePath);
+		} else {
+			this.selectedNotePaths.add(filePath);
+		}
+		this.render();
+	}
+
+	/**
+	 * 确认添加笔记
+	 */
+	private async confirmAddNotes(): Promise<void> {
+		if (this.selectedNotePaths.size === 0) {
+			return;
+		}
+
+		// 获取当前已有的笔记路径
+		const existingPaths = new Set(this.plugin.settings.combineNotes.map(n => n.path));
+
+		// 获取最大order值
+		let maxOrder = this.plugin.settings.combineNotes.reduce(
+			(max, note) => Math.max(max, note.order),
+			0
+		);
+
+		// 添加新笔记
+		let addedCount = 0;
+		for (const path of this.selectedNotePaths) {
+			if (existingPaths.has(path)) {
+				continue; // 跳过已存在的
+			}
+
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (file instanceof TFile) {
+				maxOrder++;
+				this.plugin.settings.combineNotes.push({
+					path: file.path,
+					name: file.basename,
+					order: maxOrder
+				});
+				addedCount++;
+			}
+		}
+
+		// 保存设置
+		await this.plugin.saveSettings();
+
+		// 退出搜索模式
+		this.exitSearchMode();
+
+		// 显示通知
+		new Notice(`已添加 ${addedCount} 个笔记`);
 	}
 
 	// ==================== 学习中心 ====================
