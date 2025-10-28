@@ -1,0 +1,67 @@
+# GitHub Actions 工作流配置说明
+
+## 文件说明
+- `.github/workflows/build-and-release.yml`: 主要的构建和发布工作流
+
+## 功能特性
+
+### 🔄 多触发机制
+- **代码推送**: 推送到 `main` 或 `master` 分支时自动构建
+- **Release发布**: 创建 GitHub Release 时自动上传文件
+- **手动触发**: 在 Actions 页面手动运行工作流
+
+### 🏗️ 构建流程
+1. **环境准备**: Node.js 20.x + npm 缓存优化
+2. **依赖安装**: `npm ci` 确保依赖一致性
+3. **版本验证**: 检查 `manifest.json` 版本号
+4. **构建打包**: 运行 `npm run build:zip` 生成插件包
+5. **文件验证**: 确保必需文件存在
+6. **产物上传**: 上传到 GitHub Artifacts
+
+### 🚀 Release发布
+- 检测到 Release 发布事件时自动触发
+- 下载构建产物并上传到 Release 页面
+- 自动生成 Release 说明和安装指南
+
+### 📊 状态反馈
+- 详细的构建摘要信息
+- Release 发布状态通知
+- 错误处理和日志记录
+
+## 使用方法
+
+### 1. 日常开发
+```bash
+# 推送代码到主分支，自动触发构建
+git push origin main
+```
+
+### 2. 发布新版本
+```bash
+# 1. 更新版本号
+npm version patch  # 或 minor, major
+
+# 2. 推送代码
+git push origin main
+
+# 3. 在 GitHub 创建 Release
+# 访问项目页面 → Releases → Create a new release
+# 选择 tag → 填写标题和描述 → 发布
+```
+
+### 3. 手动构建
+- 访问 GitHub 项目页面
+- 进入 Actions 页面
+- 选择 "Build and Release" 工作流
+- 点击 "Run workflow"
+
+## 安全性
+- ✅ 私有仓库保护
+- ✅ 使用 GitHub 自动认证
+- ✅ 无敏感信息泄露
+- ✅ Artifacts 自动清理
+
+## 注意事项
+- 确保项目根目录有 `manifest.json` 文件
+- 确保 `package.json` 包含正确的构建脚本
+- Release 的 tag 必须与 `manifest.json` 版本号一致

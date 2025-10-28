@@ -65,14 +65,9 @@ export function getTextModels(provider: AIProvider): string[] {
 			];
 		case AIProvider.GEMINI:
 			return [
-				'gemini-2.5-pro-latest',
-				'gemini-2.5-pro-exp-03-25',
-				'gemini-2.5-flash-latest',
-				'gemini-2.5-flash-exp-03-25',
-				'gemini-2.0-flash-exp',
-				'gemini-2.0-flash-thinking-exp-01-21',
-				'gemini-1.5-pro',
-				'gemini-1.5-flash'
+				'gemini-2.5-pro',
+				'gemini-2.5-flash',
+				'gemini-2.5-flash-lite'
 			];
 		default:
 			return [];
@@ -102,14 +97,10 @@ export function getVisionModels(provider: AIProvider): string[] {
 				'deepseek-chat' // DeepSeek Chat 支持视觉
 			];
 		case AIProvider.GEMINI:
-			return [
-				'gemini-2.5-pro-latest',
-				'gemini-2.5-pro-exp-03-25',
-				'gemini-2.5-flash-latest',
-				'gemini-2.5-flash-exp-03-25',
-				'gemini-2.0-flash-exp',
-				'gemini-1.5-pro',
-				'gemini-1.5-flash'
+			return  [
+				'gemini-2.5-pro',
+				'gemini-2.5-flash',
+				'gemini-2.5-flash-lite'
 			];
 		default:
 			return [];

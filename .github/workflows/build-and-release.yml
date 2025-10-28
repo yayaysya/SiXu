@@ -1,0 +1,206 @@
+name: Build and Release
+
+# 触发条件
+on:
+  push:
+    branches: [ main, master ]  # 推送到主分支时构建
+  release:
+    types: [ published ]         # 发布Release时上传文件
+  workflow_dispatch:             # 支持手动触发
+
+jobs:
+  # 构建任务
+  build:
+    runs-on: ubuntu-latest
+    name: Build Plugin
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 完整历史记录，用于版本管理
+
+      # 2. 设置Node.js环境
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'  # 启用npm缓存加速构建
+
+      # 3. 安装依赖
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. 版本验证
+      - name: Version validation
+        run: |
+          if [ ! -f "manifest.json" ]; then
+            echo "❌ manifest.json not found"
+            exit 1
+          fi
+          version=$(jq -r '.version' manifest.json)
+          if [ "$version" = "null" ] || [ -z "$version" ]; then
+            echo "❌ Invalid version in manifest.json"
+            exit 1
+          fi
+          echo "📦 Building version: $version"
+          echo "PLUGIN_VERSION=$version" >> $GITHUB_ENV
+
+      # 5. TypeScript检查和构建
+      - name: Type checking and build
+        run: |
+          echo "🔍 Running TypeScript check..."
+          npm run build
+          echo "✅ TypeScript check passed"
+
+          echo "🏗️ Building ZIP package..."
+          npm run build:zip
+          echo "✅ ZIP package created"
+
+      # 6. 验证构建产物
+      - name: Verify build artifacts
+        run: |
+          echo "📋 Verifying build artifacts..."
+
+          # 检查必需文件
+          required_files=("main.js" "manifest.json" "styles.css")
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Required file missing: $file"
+              exit 1
+            fi
+            echo "✅ Found: $file"
+          done
+
+          # 检查ZIP文件
+          zip_files=$(ls *.zip 2>/dev/null | wc -l)
+          if [ "$zip_files" -eq 0 ]; then
+            echo "❌ No ZIP file found"
+            exit 1
+          fi
+
+          # 显示生成的文件
+          echo "📦 Generated files:"
+          ls -la *.zip *.js *.json *.css 2>/dev/null || true
+
+      # 7. 上传构建产物
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: obsidian-plugin-${{ env.PLUGIN_VERSION }}
+          path: |
+            *.zip
+            main.js
+            manifest.json
+            styles.css
+          retention-days: 30  # 保留30天
+          if-no-files-found: error
+
+      # 8. 构建摘要
+      - name: Build Summary
+        run: |
+          echo "## 🎉 构建完成!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 构建信息" >> $GITHUB_STEP_SUMMARY
+          echo "- **版本**: ${{ env.PLUGIN_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **提交**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **时间**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 生成的文件" >> $GITHUB_STEP_SUMMARY
+          ls -la *.zip *.js *.json *.css 2>/dev/null | while read line; do
+            echo "- $line" >> $GITHUB_STEP_SUMMARY
+          done
+
+  # Release发布任务
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Release Plugin
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+      # 1. 下载构建产物
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: obsidian-plugin-${{ github.event.release.tag_name }}
+          path: ./release-files
+
+      # 2. 验证下载的文件
+      - name: Verify downloaded files
+        run: |
+          cd release-files
+          echo "📋 Downloaded files:"
+          ls -la
+
+          zip_files=$(ls *.zip 2>/dev/null | wc -l)
+          if [ "$zip_files" -eq 0 ]; then
+            echo "❌ No ZIP file found in artifacts"
+            exit 1
+          fi
+
+          echo "✅ Found $zip_files ZIP file(s)"
+
+      # 3. 上传到Release
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-files/*.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 4. Release摘要
+      - name: Release Summary
+        run: |
+          echo "## 🚀 Release 发布完成!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Release 信息" >> $GITHUB_STEP_SUMMARY
+          echo "- **版本**: ${{ github.event.release.tag_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **名称**: ${{ github.event.release.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 发布文件" >> $GITHUB_STEP_SUMMARY
+          cd release-files
+          ls -la *.zip | while read line; do
+            size=$(echo $line | awk '{print $5}')
+            file=$(echo $line | awk '{print $9}')
+            echo "- **$file**: $(numfmt --to=iec-i --suffix=B $size)" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📥 安装说明" >> $GITHUB_STEP_SUMMARY
+          echo "1. 下载对应版本的ZIP文件" >> $GITHUB_STEP_SUMMARY
+          echo "2. 在Obsidian中启用第三方插件" >> $GITHUB_STEP_SUMMARY
+          echo "3. 将ZIP文件解压到插件目录" >> $GITHUB_STEP_SUMMARY
+          echo "4. 在设置中启用'思序'插件" >> $GITHUB_STEP_SUMMARY
+
+  # 通知任务（可选）
+  notify:
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    name: Build Status
+    if: always()
+
+    steps:
+      - name: Build Status Notification
+        run: |
+          if [ "${{ needs.build.result }}" = "success" ]; then
+            echo "✅ 构建成功完成"
+          else
+            echo "❌ 构建失败"
+            exit 1
+          fi
+
+          if [ "${{ github.event_name }}" = "release" ] && [ "${{ github.event.action }}" = "published" ]; then
+            if [ "${{ needs.release.result }}" = "success" ]; then
+              echo "🎉 Release ${{ github.event.release.tag_name }} 发布成功!"
+            else
+              echo "❌ Release 发布失败"
+              exit 1
+            fi
+          fi
