@@ -1021,7 +1021,12 @@ button.mod-cta:hover {
 .quiz-generation-modal select,
 .quiz-generation-modal input[type="number"] {
     width: 100%;
-    padding: 8px 12px;
+    /* 统一高度/内边距，避免不同系统下文字基线下沉 */
+    padding: 6px 12px;
+    min-height: 36px;
+    line-height: 1.4;
+    box-sizing: border-box;
+    vertical-align: middle;
     border: 1px solid var(--background-modifier-border);
     border-radius: 4px;
     background-color: var(--background-primary);
@@ -2221,4 +2226,3 @@ button.mod-cta:hover {
     opacity: 0.5;
     cursor: not-allowed;
 }
-

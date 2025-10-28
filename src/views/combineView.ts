@@ -16,7 +16,7 @@ type ViewPage = 'home' | 'organize' | 'learning' | 'profile';
 /**
  * 学习中心子页面状态
  */
-type LearningViewState = 'hub' | 'quiz-list' | 'quiz-exam' | 'quiz-result';
+type LearningViewState = 'hub' | 'quiz-hub' | 'quiz-list' | 'quiz-exam' | 'quiz-result';
 
 /**
  * @deprecated 旧的Tab类型，保留用于兼容
@@ -2676,6 +2676,9 @@ export class CombineNotesView extends ItemView {
 			case 'hub':
 				this.renderLearningHub(container);
 				break;
+			case 'quiz-hub':
+				this.renderQuizHubPage(container);
+				break;
 			case 'quiz-list':
 				this.renderQuizListPage(container);
 				break;
@@ -2722,8 +2725,64 @@ export class CombineNotesView extends ItemView {
 		quizCard.createEl('p', { text: 'Quiz 知识测验' });
 
 		quizCard.addEventListener('click', () => {
+			this.learningState = 'quiz-hub';
+			this.render();
+		});
+	}
+
+	/**
+	 * 渲染 Quiz Hub（选择“已有试题”或“创建新试题”）
+	 */
+	private renderQuizHubPage(container: HTMLElement): void {
+		const page = container.createDiv({ cls: 'quiz-hub-page' });
+
+		// 头部
+		const header = page.createDiv({ cls: 'page-header-with-back' });
+		const backBtn = header.createEl('button', { cls: 'back-btn' });
+		setIcon(backBtn, 'arrow-left');
+		backBtn.addEventListener('click', () => {
+			this.learningState = 'hub';
+			this.render();
+		});
+		header.createEl('h2', { text: 'Quiz 学习', cls: 'page-title' });
+
+		const options = page.createDiv({ cls: 'learning-options' });
+
+		// 选择已有试题
+		const existingCard = options.createDiv({ cls: 'learning-card' });
+		existingCard.createDiv({ cls: 'card-icon-large', text: '📚' });
+		existingCard.createEl('h3', { text: '选择已有试题' });
+		existingCard.createEl('p', { text: '浏览并开始一套已有试题' });
+		existingCard.addEventListener('click', () => {
 			this.learningState = 'quiz-list';
 			this.render();
+		});
+
+		// 创建新试题
+		const createCard = options.createDiv({ cls: 'learning-card' });
+		createCard.createDiv({ cls: 'card-icon-large', text: '✨' });
+		createCard.createEl('h3', { text: '创建新试题' });
+		createCard.createEl('p', { text: '从当前笔记或选择笔记生成试题' });
+		createCard.addEventListener('click', async () => {
+			let sourceFile = this.plugin.app.workspace.getActiveFile();
+			if (!(sourceFile instanceof TFile)) {
+				// 无激活笔记，弹出文件选择器
+				sourceFile = await this.showFilePickerModal();
+			}
+			if (sourceFile) {
+				await this.generateQuiz(sourceFile);
+			}
+		});
+	}
+
+	/**
+	 * 选择一个 Markdown 文件作为 Quiz 源
+	 */
+	private showFilePickerModal(): Promise<TFile | null> {
+		return new Promise((resolve) => {
+			const allFiles = this.app.vault.getFiles().filter(f => f.extension === 'md');
+			const modal = new FilePickerModal(this.app, allFiles, (file) => resolve(file));
+			modal.open();
 		});
 	}
 
@@ -2739,7 +2798,7 @@ export class CombineNotesView extends ItemView {
 		const backBtn = header.createEl('button', { cls: 'back-btn' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
-			this.learningState = 'hub';
+			this.learningState = 'quiz-hub';
 			this.render();
 		});
 
@@ -3000,4 +3059,72 @@ class QuizGenerationModal extends Modal {
 		};
 		this.close();
 	}
+}
+
+/**
+ * 简易文件选择器（用于选择生成 Quiz 的源笔记）
+ */
+class FilePickerModal extends Modal {
+    private files: TFile[];
+    private onChoose: (file: TFile | null) => void;
+    private selected: TFile | null = null;
+    private listContainer!: HTMLElement;
+    private searchInput!: HTMLInputElement;
+
+    constructor(app: App, files: TFile[], onChoose: (file: TFile | null) => void) {
+        super(app);
+        this.files = files;
+        this.onChoose = onChoose;
+    }
+
+    onOpen(): void {
+        const { contentEl } = this;
+        contentEl.empty();
+        this.modalEl.addClass('file-picker-modal');
+
+        contentEl.createEl('h3', { text: '选择笔记生成试题' });
+
+        // 搜索框
+        const searchWrap = contentEl.createDiv({ cls: 'setting-item' });
+        this.searchInput = searchWrap.createEl('input', { type: 'text', placeholder: '输入关键词过滤…' });
+        this.searchInput.addEventListener('input', () => this.renderList());
+
+        // 列表
+        this.listContainer = contentEl.createDiv({ cls: 'file-list-container' });
+        this.renderList();
+
+        // 按钮
+        const btns = contentEl.createDiv({ cls: 'modal-button-container' });
+        const cancelBtn = btns.createEl('button', { text: '取消' });
+        cancelBtn.addEventListener('click', () => { this.selected = null; this.close(); });
+    }
+
+    private renderList(): void {
+        this.listContainer.empty();
+        const keyword = (this.searchInput?.value || '').trim().toLowerCase();
+        const filtered = keyword
+            ? this.files.filter(f => f.basename.toLowerCase().includes(keyword) || f.path.toLowerCase().includes(keyword))
+            : this.files;
+
+        if (filtered.length === 0) {
+            this.listContainer.createDiv({ text: '未找到匹配的笔记', cls: 'empty-state' });
+            return;
+        }
+
+        // 按最近修改时间倒序
+        filtered.sort((a, b) => b.stat.mtime - a.stat.mtime);
+
+        filtered.slice(0, 200).forEach(file => {
+            const item = this.listContainer.createDiv({ cls: 'file-list-item' });
+            item.createDiv({ cls: 'file-name', text: file.basename });
+            item.createDiv({ cls: 'file-path', text: file.path });
+            item.addEventListener('click', () => { this.selected = file; this.close(); });
+        });
+    }
+
+    onClose(): void {
+        const { contentEl } = this;
+        contentEl.empty();
+        this.onChoose(this.selected);
+    }
 }
