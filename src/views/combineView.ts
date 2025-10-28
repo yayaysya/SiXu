@@ -1115,14 +1115,14 @@ export class CombineNotesView extends ItemView {
 					checkbox.checked = true;
 				}
 				checkbox.addEventListener('change', () => {
-					let selected = this.userAnswers.get(question.id) as string[] || [];
-					if (!Array.isArray(selected)) selected = [];
-
-					if (checkbox.checked) {
-						selected.push(optionLabel);  // 存储字母
-					} else {
-						selected = selected.filter(s => s !== optionLabel);
-					}
+					// 获取当前所有选中的checkbox
+					const allCheckboxes = container.querySelectorAll(`input[type="checkbox"]`) as NodeListOf<HTMLInputElement>;
+					const selected: string[] = [];
+					allCheckboxes.forEach(cb => {
+						if (cb.checked) {
+							selected.push(cb.value);
+						}
+					});
 					this.userAnswers.set(question.id, selected);
 				});
 				labelEl.createSpan({ text: option });  // 显示完整选项
@@ -1165,8 +1165,11 @@ export class CombineNotesView extends ItemView {
 		prevBtn.disabled = this.currentQuestionIndex === 0;
 		prevBtn.addEventListener('click', () => {
 			if (this.currentQuestionIndex > 0) {
+				// 保存当前题目的答案状态（确保最新状态被保存）
+				this.saveCurrentQuestionAnswer();
 				this.currentQuestionIndex--;
-				this.render();
+				// 只重新渲染考试界面，避免完整的页面重渲染
+				this.renderExamViewOnly();
 			}
 		});
 
@@ -1186,11 +1189,78 @@ export class CombineNotesView extends ItemView {
 				// 提交答卷
 				this.submitExam();
 			} else {
+				// 保存当前题目的答案状态
+				this.saveCurrentQuestionAnswer();
 				// 下一题
 				this.currentQuestionIndex++;
-				this.render();
+				// 只重新渲染考试界面
+				this.renderExamViewOnly();
 			}
 		});
+	}
+
+	/**
+	 * 保存当前题目的答案状态
+	 */
+	private saveCurrentQuestionAnswer(): void {
+		if (this.currentQuestionIndex >= 0 && this.currentQuestionIndex < this.currentQuestions.length) {
+			const question = this.currentQuestions[this.currentQuestionIndex];
+			const questionContainer = document.querySelector('.exam-question-container');
+
+			if (!questionContainer) return;
+
+			// 根据题目类型收集答案
+			if (question.type === 'single-choice') {
+				const selectedRadio = questionContainer.querySelector(`input[name="question-${question.id}"]:checked`) as HTMLInputElement;
+				if (selectedRadio) {
+					this.userAnswers.set(question.id, selectedRadio.value);
+				}
+			} else if (question.type === 'multiple-choice') {
+				const selectedCheckboxes = questionContainer.querySelectorAll(`input[type="checkbox"]:checked`) as NodeListOf<HTMLInputElement>;
+				const selected: string[] = [];
+				selectedCheckboxes.forEach(checkbox => {
+					selected.push(checkbox.value);
+				});
+				this.userAnswers.set(question.id, selected);
+			} else if (question.type === 'fill-blank') {
+				const input = questionContainer.querySelector('.exam-input') as HTMLInputElement;
+				if (input) {
+					this.userAnswers.set(question.id, input.value);
+				}
+			} else if (question.type === 'short-answer') {
+				const textarea = questionContainer.querySelector('.exam-textarea') as HTMLTextAreaElement;
+				if (textarea) {
+					this.userAnswers.set(question.id, textarea.value);
+				}
+			}
+		}
+	}
+
+	/**
+	 * 只重新渲染考试界面，避免完整的页面重渲染
+	 */
+	private renderExamViewOnly(): void {
+		const container = this.containerEl.querySelector('.view-content-area') as HTMLElement;
+		if (!container) return;
+
+		// 清空容器并重新渲染考试界面
+		container.empty();
+		const examEl = container.createDiv({ cls: 'quiz-exam' });
+
+		if (this.currentQuestions.length === 0) {
+			const emptyEl = examEl.createDiv({ cls: 'combine-view-empty' });
+			emptyEl.createEl('p', { text: '加载题目失败' });
+			return;
+		}
+
+		// 顶部进度条
+		this.renderExamProgress(examEl);
+
+		// 题目显示区域
+		this.renderCurrentQuestion(examEl);
+
+		// 底部导航按钮
+		this.renderExamNavigation(examEl);
 	}
 
 	/**
