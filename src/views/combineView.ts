@@ -2247,9 +2247,13 @@ export class CombineNotesView extends ItemView {
 		// 渲染文件夹列表的函数
 		const renderFolderOptions = (filterText: string) => {
 			folderList.empty();
-			const filteredFolders = filterText 
-				? allFolders.filter(f => f.toLowerCase().includes(filterText.toLowerCase()))
-				: allFolders;
+
+			// 只有当有搜索文本时才显示列表
+			if (!filterText) {
+				return;
+			}
+
+			const filteredFolders = allFolders.filter(f => f.toLowerCase().includes(filterText.toLowerCase()));
 
 			if (filteredFolders.length === 0) {
 				folderList.createDiv({ cls: 'filter-empty', text: '无匹配的文件夹' });
@@ -2273,9 +2277,6 @@ export class CombineNotesView extends ItemView {
 				option.createSpan({ text: folder || '根目录' });
 			});
 		};
-
-		// 初始渲染
-		renderFolderOptions('');
 
 		// 搜索事件
 		folderSearchInput.addEventListener('input', (e) => {
@@ -2366,9 +2367,13 @@ export class CombineNotesView extends ItemView {
 		// 渲染标签列表的函数
 		const renderTagOptions = (filterText: string) => {
 			tagList.empty();
-			const filteredTags = filterText 
-				? allTagsArray.filter(t => t.toLowerCase().includes(filterText.toLowerCase()))
-				: allTagsArray;
+
+			// 只有当有搜索文本时才显示列表
+			if (!filterText) {
+				return;
+			}
+
+			const filteredTags = allTagsArray.filter(t => t.toLowerCase().includes(filterText.toLowerCase()));
 
 			if (filteredTags.length === 0) {
 				tagList.createDiv({ cls: 'filter-empty', text: '无匹配的标签' });
@@ -2393,9 +2398,6 @@ export class CombineNotesView extends ItemView {
 			});
 		};
 
-		// 初始渲染
-		renderTagOptions('');
-
 		// 搜索事件
 		tagSearchInput.addEventListener('input', (e) => {
 			console.log('标签搜索输入:', tagSearchInput.value);
@@ -2418,6 +2420,18 @@ export class CombineNotesView extends ItemView {
 		});
 		keywordInput.addEventListener('click', (e) => {
 			e.stopPropagation();
+		});
+
+		// 底部确认按钮
+		const confirmSection = drawer.createDiv({ cls: 'filter-confirm-section' });
+		const confirmBtn = confirmSection.createEl('button', {
+			text: '确认筛选',
+			cls: 'filter-confirm-btn'
+		});
+		confirmBtn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			this.showFilterDrawer = false;
+			this.render();
 		});
 	}
 

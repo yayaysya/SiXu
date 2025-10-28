@@ -2052,6 +2052,31 @@ button.mod-cta:hover {
     border-color: var(--interactive-accent);
 }
 
+/* 筛选确认按钮区域 */
+.filter-confirm-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.filter-confirm-btn {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-confirm-btn:hover {
+    background: var(--interactive-accent-hover);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
 /* 搜索结果容器 */
 .search-results-container {
     flex: 1;
