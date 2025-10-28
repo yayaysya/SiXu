@@ -4,6 +4,7 @@ import { CombineNoteItem, QuizQuestion, QuizQuestionResult, QuizData } from '../
 import { StatisticsManager } from '../utils/statistics';
 import { Activity, getActivityTypeLabel, getActivityTypeIcon } from '../types/activity';
 import { ProgressCard } from '../components/ProgressCard';
+import { formatNumber } from '../utils/format';
 
 export const COMBINE_VIEW_TYPE = 'notebook-llm-combine-view';
 
@@ -1413,8 +1414,8 @@ export class CombineNotesView extends ItemView {
 
 		// 大分数显示
 		const scoreEl = cardEl.createDiv({ cls: 'result-score-display' });
-		const scoreNum = scoreEl.createDiv({ cls: 'result-score-number' });
-		scoreNum.setText(`${totalScore}`);
+        const scoreNum = scoreEl.createDiv({ cls: 'result-score-number' });
+        scoreNum.setText(formatNumber(totalScore));
 
 		const scoreMeta = scoreEl.createDiv({ cls: 'result-score-meta' });
 		scoreMeta.createSpan({ text: `/ ${maxScore}`, cls: 'result-score-max' });
@@ -1457,7 +1458,7 @@ export class CombineNotesView extends ItemView {
 			nameEl.setText(typeName);
 
 			const scoreEl = itemEl.createDiv({ cls: 'type-stat-score' });
-			scoreEl.setText(`${stat.score} / ${stat.max}`);
+        scoreEl.setText(`${formatNumber(stat.score)} / ${formatNumber(stat.max, 0)}`);
 
 			const percentage = stat.max > 0 ? ((stat.score / stat.max) * 100).toFixed(0) : '0';
 			const barEl = itemEl.createDiv({ cls: 'type-stat-bar' });
@@ -1487,7 +1488,7 @@ export class CombineNotesView extends ItemView {
 			// 题目头部
 			const headerEl = itemEl.createDiv({ cls: 'result-detail-header' });
 			headerEl.createSpan({ text: `${statusEmoji} 题目 ${index + 1}`, cls: 'result-detail-number' });
-			headerEl.createSpan({ text: `${result.score}/${result.maxScore}分`, cls: 'result-detail-score' });
+        headerEl.createSpan({ text: `${formatNumber(result.score)}/${formatNumber(result.maxScore, 0)}分`, cls: 'result-detail-score' });
 
 			// 题目内容
 			const questionEl = itemEl.createDiv({ cls: 'result-detail-question' });
@@ -2906,6 +2907,9 @@ class QuizGenerationModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
+
+		// 添加自定义类名，避免样式污染其他模态框
+		this.modalEl.addClass('quiz-generation-modal');
 
 		// 标题
 		contentEl.createEl('h3', { text: '生成Quiz设置' });

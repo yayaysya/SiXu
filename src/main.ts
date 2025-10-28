@@ -63,10 +63,36 @@ export default class NotebookLLMPlugin extends Plugin {
 				if (file instanceof TFile && file.extension === 'md') {
 					menu.addItem((item) => {
 						item
+							.setTitle('添加到待整理列表')
+							.setIcon('plus')
+							.onClick(() => {
+								this.addNoteToCombineList(file);
+							});
+					});
+
+					menu.addItem((item) => {
+						item
 							.setTitle('AI 整理笔记')
 							.setIcon('sparkles')
 							.onClick(() => {
 								this.organizeNote(file);
+							});
+					});
+				}
+			})
+		);
+
+		// 添加编辑器右键菜单
+		this.registerEvent(
+			this.app.workspace.on('editor-menu', (menu, editor, view) => {
+				const activeFile = this.app.workspace.getActiveFile();
+				if (activeFile && activeFile.extension === 'md' && editor.somethingSelected()) {
+					menu.addItem((item) => {
+						item
+							.setTitle('添加笔记到待整理列表')
+							.setIcon('plus')
+							.onClick(() => {
+								this.addNoteToCombineList(activeFile);
 							});
 					});
 				}
@@ -533,6 +559,65 @@ export default class NotebookLLMPlugin extends Plugin {
 			}
 			new Notice(`❌ 处理失败: ${error.message}`, 5000);
 			throw error; // 重新抛出错误，让调用者可以处理
+		}
+	}
+
+	/**
+	 * 添加笔记到待整理列表
+	 */
+	async addNoteToCombineList(file: TFile): Promise<void> {
+		try {
+			// 检查是否已存在
+			if (this.isNoteInCombineList(file)) {
+				new Notice('该笔记已在待整理列表中', 3000);
+				return;
+			}
+
+			// 获取最大order值
+			const maxOrder = this.settings.combineNotes.reduce(
+				(max, note) => Math.max(max, note.order),
+				0
+			);
+
+			// 添加新笔记
+			const newNote = {
+				path: file.path,
+				name: file.basename,
+				order: maxOrder + 1
+			};
+
+			this.settings.combineNotes.push(newNote);
+			await this.saveSettings();
+
+			// 显示成功通知
+			new Notice(`✅ 已添加 "${file.basename}" 到待整理列表`, 3000);
+
+			// 通知UI更新
+			await this.notifyCombineViewUpdate();
+
+		} catch (error) {
+			console.error('添加笔记到待整理列表失败:', error);
+			new Notice(`❌ 添加失败: ${error.message}`, 5000);
+		}
+	}
+
+	/**
+	 * 检查文件是否已在待整理列表中
+	 */
+	private isNoteInCombineList(file: TFile): boolean {
+		return this.settings.combineNotes.some(note => note.path === file.path);
+	}
+
+	/**
+	 * 通知所有CombineNotesView实例更新UI
+	 */
+	private async notifyCombineViewUpdate(): Promise<void> {
+		const leaves = this.app.workspace.getLeavesOfType(COMBINE_VIEW_TYPE);
+
+		for (const leaf of leaves) {
+			if (leaf.view instanceof CombineNotesView) {
+				leaf.view.refresh();
+			}
 		}
 	}
 }

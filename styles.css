@@ -57,8 +57,8 @@
     gap: 5px;
 }
 
-/* 设置项描述 */
-.setting-item-description {
+/* 设置项描述 - 限定在插件设置页面内 */
+.notebook-llm-settings .setting-item-description {
     color: var(--text-muted);
     font-size: 0.9em;
     line-height: 1.4;
@@ -81,11 +81,6 @@
     padding: 6px 8px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 4px;
-}
-
-/* 设置项间距 */
-.setting-item {
-    margin-bottom: 15px;
 }
 
 /* 警告按钮 */
@@ -1004,38 +999,37 @@ button.mod-cta:hover {
 
 /* ===== Quiz生成对话框样式 ===== */
 
-/* Obsidian Modal 自定义样式 */
-.modal h3 {
+/* Quiz Modal 专用样式 - 使用特定类名避免全局污染 */
+.quiz-generation-modal h3 {
     margin: 0 0 20px 0;
     font-size: 1.2em;
     font-weight: 600;
     color: var(--text-normal);
 }
 
-.modal .setting-item {
+.quiz-generation-modal .setting-item {
     margin-bottom: 16px;
 }
 
-.modal .setting-item-name {
+.quiz-generation-modal .setting-item-name {
     font-size: 0.95em;
     font-weight: 500;
     color: var(--text-normal);
     margin-bottom: 8px;
 }
 
-.modal select,
-.modal input[type="number"] {
+.quiz-generation-modal select,
+.quiz-generation-modal input[type="number"] {
     width: 100%;
-    padding: 8px;
+    padding: 8px 12px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 4px;
     background-color: var(--background-primary);
     color: var(--text-normal);
-    font-size: 0.9em;
 }
 
-.modal select:focus,
-.modal input[type="number"]:focus {
+.quiz-generation-modal select:focus,
+.quiz-generation-modal input[type="number"]:focus {
     outline: none;
     border-color: var(--interactive-accent);
 }

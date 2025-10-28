@@ -30,21 +30,31 @@ export class StatisticsManager {
 	}
 
 	/**
-	 * 获取已合并笔记的数量
+	 * 判断是否为“组合笔记”文件
+	 * 规则：
+	 * 1) frontmatter 中包含 source_files 且为非空数组（首选）
+	 * 2) 或者文件名匹配 组合笔记_YYYY-MM-DD(_N) 模式（兜底）
+	 */
+	private isCombinedNote(file: TFile): boolean {
+		if (file.extension !== 'md') return false;
+		const metadata = this.app.metadataCache.getFileCache(file);
+		const fm: any = metadata?.frontmatter;
+		const hasSourceFiles = Array.isArray(fm?.source_files) && fm.source_files.length > 0;
+		if (hasSourceFiles) return true;
+		const namePattern = /^组合笔记_\d{4}-\d{2}-\d{2}(?:_\d+)?$/;
+		return namePattern.test(file.basename);
+	}
+
+	/**
+	 * 获取已合并笔记的数量（跨目录识别）
 	 */
 	async getCombinedNotesCount(): Promise<number> {
 		const cacheKey = 'combined-notes-count';
 		const cached = this.getFromCache(cacheKey);
 		if (cached !== null) return cached;
 
-		// 组合笔记目录固定为"组合笔记"
-		const combineDir = '组合笔记';
 		const files = this.app.vault.getFiles();
-
-		// 统计在组合笔记目录中的文件
-		const count = files.filter(file =>
-			file.path.startsWith(combineDir + '/') && file.extension === 'md'
-		).length;
+		const count = files.filter(file => this.isCombinedNote(file)).length;
 
 		this.setCache(cacheKey, count);
 		return count;
@@ -113,13 +123,13 @@ export class StatisticsManager {
 
 		// 获取所有相关文件
 		const files = this.app.vault.getFiles();
-		const combineDir = '组合笔记';
+		// 历史版本以目录识别，现改为跨目录识别
 		const quizDir = this.plugin.settings.quizDir || 'quiz';
 
 		// 收集活动
 		for (const file of files) {
-			// 组合笔记
-			if (file.path.startsWith(combineDir + '/') && file.extension === 'md') {
+			// 组合笔记（跨目录识别）
+			if (this.isCombinedNote(file)) {
 				activities.push({
 					type: 'combine-created',
 					title: file.basename,

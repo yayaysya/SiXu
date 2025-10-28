@@ -1,6 +1,7 @@
 import { App, TFile } from 'obsidian';
 import { QuizQuestion, QuizQuestionResult, QuizResult, QuizData } from '../types';
 import NotebookLLMPlugin from '../main';
+import { formatNumber } from '../utils/format';
 
 /**
  * Quiz结果文件生成器
@@ -76,9 +77,9 @@ export class ResultGenerator {
 
 		// 构建题型得分对象
 		const breakdown: Record<string, string> = {};
-		typeStats.forEach((stat, typeName) => {
-			breakdown[typeName] = `${stat.score}/${stat.max}`;
-		});
+        typeStats.forEach((stat, typeName) => {
+            breakdown[typeName] = `${formatNumber(stat.score)}/${formatNumber(stat.max, 0)}`;
+        });
 
 		// 分析薄弱和优势领域（简化版）
 		const weakAreas: string[] = [];
@@ -119,11 +120,11 @@ export class ResultGenerator {
 		const date = new Date(result.examDate);
 		const dateStr = date.toLocaleString('zh-CN');
 
-		let markdown = `---
+        let markdown = `---
 quiz_file: ${result.quizFile}
 exam_date: ${result.examDate}
-total_score: ${result.totalScore}
-max_score: ${result.maxScore}
+total_score: ${formatNumber(result.totalScore)}
+max_score: ${formatNumber(result.maxScore, 0)}
 percentage: ${percentage}
 ---
 
@@ -133,7 +134,7 @@ percentage: ${percentage}
 
 - **测验名称**: ${quizData.metadata.title}
 - **考试时间**: ${dateStr}
-- **总分**: ${result.totalScore} / ${result.maxScore} (${percentage}%)
+- **总分**: ${formatNumber(result.totalScore)} / ${formatNumber(result.maxScore, 0)} (${percentage}%)
 
 ## 分数统计
 
@@ -173,7 +174,7 @@ percentage: ${percentage}
 			markdown += `### 题目 ${index + 1} ${statusEmoji}\n\n`;
 			markdown += `**题型**: ${this.getQuestionTypeName(question.type)} | `;
 			markdown += `**难度**: ${question.difficulty} | `;
-			markdown += `**得分**: ${result.score}/${result.maxScore}\n\n`;
+            markdown += `**得分**: ${formatNumber(result.score)}/${formatNumber(result.maxScore, 0)}\n\n`;
 			markdown += `**题目**: ${question.question}\n\n`;
 
 			// 选择题显示选项
