@@ -146,7 +146,7 @@ export class LinkProcessor {
 			if (link.fetchSuccess && link.summary) {
 				return `${link.text || link.url}: ${link.summary}`;
 			} else {
-				return `${link.text || link.url} (链接: ${link.url})`;
+				return `${link.text || link.url} (来源: ${link.url})`;
 			}
 		});
 	}

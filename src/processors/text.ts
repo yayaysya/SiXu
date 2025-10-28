@@ -82,6 +82,9 @@ export class TextProcessor {
 			finalArticle = this.ensureMetadata(finalArticle, metadata);
 		}
 
+		// 清理文章中的多余内容（包括多余的"链接"文字）
+		finalArticle = this.cleanArticle(finalArticle);
+
 		return finalArticle;
 	}
 
@@ -137,7 +140,7 @@ export class TextProcessor {
 			promptParts.push("\n\n【以下是已成功爬取的链接内容,请融入文章正文或在文末引用】\n\n");
 			links.forEach((link, i) => {
 				promptParts.push(
-					`链接${i + 1}: [${link.text || '参考'}](${link.url})\n` +
+					`资源${i + 1}: [${link.text || '参考'}](${link.url})\n` +
 					`内容摘要: ${link.summary}\n\n`
 				);
 			});
@@ -148,10 +151,11 @@ export class TextProcessor {
 \n请你:
 1. 将这些内容整合成一篇连贯的文章
 2. 在合适的位置插入图片,格式: ![图片描述](图片URL)
-3. **成功爬取的链接**: 可以融入正文叙述,或在文末引用,格式: [链接标题](链接URL)
+3. **成功爬取的资源**: 可以融入正文叙述,或在文末引用,格式: [标题](URL)
 4. **保留所有代码块、引用块、分隔线等特殊格式,不要修改**
 5. 优化语言表达,但不改变核心意思
 6. 输出完整的 Markdown 格式文章
+7. **重要**: 不要在参考链接部分额外添加"链接"文字,只需要显示标题和URL
 `);
 
 		const userPrompt = promptParts.join('');
@@ -291,6 +295,18 @@ export class TextProcessor {
 		// 移除可能的多余 YAML 代码块 (AI 可能误输出)
 		// 只移除包含 YAML front matter 字段的代码块
 		let cleaned = article.replace(/```yaml\s*\n([\s\S]*?(?:created|modified|publish|tags|完成度)[\s\S]*?)\n```\s*\n?/g, '');
+
+		// 移除参考链接部分多余的"链接"文字
+		// 匹配 "参考链接" 标题后面单独一行的 "链接" 文字
+		cleaned = cleaned.replace(/(#+\s*参考链接\s*\n\s*)链接\s*\n/gi, '$1');
+
+		// 也处理可能的"链接:"格式
+		cleaned = cleaned.replace(/(#+\s*参考链接\s*\n\s*)链接[:：]\s*\n/gi, '$1');
+
+		// 处理参考链接部分每行前面多余的"链接"前缀
+		cleaned = cleaned.replace(/(#+\s*参考链接[\s\S]*?)(\n\s*)链接\s*\d+[:：]\s*/g, '$1$2');
+		// 处理可能剩余的"链接 X:"格式
+		cleaned = cleaned.replace(/^(\s*)链接\s*\d+[:：]\s*/gm, '$1');
 
 		// 移除可能的多余空行
 		cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
