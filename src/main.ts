@@ -124,7 +124,31 @@ export default class NotebookLLMPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const loadedData = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+
+		// 配置迁移：从旧格式（共享providers）转换为新格式（分离text和vision）
+		if (loadedData && loadedData.providers) {
+			const oldProviders = loadedData.providers;
+			// 检查是否是旧格式（没有text/vision分组）
+			if (!oldProviders.text && !oldProviders.vision) {
+				console.log('检测到旧版本配置，正在迁移...');
+				// 将旧配置复制到text和vision两个分支
+				this.settings.providers = {
+					text: {
+						...DEFAULT_SETTINGS.providers.text,
+						...oldProviders
+					},
+					vision: {
+						...DEFAULT_SETTINGS.providers.vision,
+						...oldProviders
+					}
+				};
+				// 保存迁移后的配置
+				await this.saveSettings();
+				console.log('配置迁移完成');
+			}
+		}
 	}
 
 	async saveSettings() {
@@ -166,8 +190,8 @@ export default class NotebookLLMPlugin extends Plugin {
 	 */
 	async organizeNote(file: TFile) {
 		// 验证 API Key
-		const textProviderConfig = this.settings.providers[this.settings.textProvider];
-		const visionProviderConfig = this.settings.providers[this.settings.visionProvider];
+		const textProviderConfig = this.settings.providers.text[this.settings.textProvider];
+		const visionProviderConfig = this.settings.providers.vision[this.settings.visionProvider];
 
 		if (!textProviderConfig.apiKey) {
 			new Notice(`❌ 请先在设置中配置 ${this.settings.textProvider} 的 API Key`);
@@ -354,8 +378,8 @@ export default class NotebookLLMPlugin extends Plugin {
 		onProgress?: (percent: number, status: string) => void
 	): Promise<void> {
 		// 验证 API Key
-		const textProviderConfig = this.settings.providers[this.settings.textProvider];
-		const visionProviderConfig = this.settings.providers[this.settings.visionProvider];
+		const textProviderConfig = this.settings.providers.text[this.settings.textProvider];
+		const visionProviderConfig = this.settings.providers.vision[this.settings.visionProvider];
 
 		if (!textProviderConfig.apiKey) {
 			new Notice(`❌ 请先在设置中配置 ${this.settings.textProvider} 的 API Key`);

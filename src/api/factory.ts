@@ -6,7 +6,7 @@ import { NotebookLLMSettings, AIProvider } from '../types';
  */
 export function createTextProvider(settings: NotebookLLMSettings): UnifiedAIProvider {
 	const provider = settings.textProvider;
-	const config = settings.providers[provider];
+	const config = settings.providers.text[provider];
 	const model = settings.textModel;
 
 	if (!config.apiKey) {
@@ -21,7 +21,7 @@ export function createTextProvider(settings: NotebookLLMSettings): UnifiedAIProv
  */
 export function createVisionProvider(settings: NotebookLLMSettings): UnifiedAIProvider {
 	const provider = settings.visionProvider;
-	const config = settings.providers[provider];
+	const config = settings.providers.vision[provider];
 	const model = settings.visionModel;
 
 	if (!config.apiKey) {

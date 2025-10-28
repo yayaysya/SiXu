@@ -28,12 +28,20 @@ export interface NotebookLLMSettings {
 	visionProvider: AIProvider;
 	visionModel: string;
 
-	// 各厂商 API 配置
+	// 各厂商 API 配置（分离文本和视觉，避免共享配置）
 	providers: {
-		[AIProvider.ZHIPU]: ProviderSettings;
-		[AIProvider.OPENAI]: ProviderSettings;
-		[AIProvider.DEEPSEEK]: ProviderSettings;
-		[AIProvider.GEMINI]: ProviderSettings;
+		text: {
+			[AIProvider.ZHIPU]: ProviderSettings;
+			[AIProvider.OPENAI]: ProviderSettings;
+			[AIProvider.DEEPSEEK]: ProviderSettings;
+			[AIProvider.GEMINI]: ProviderSettings;
+		};
+		vision: {
+			[AIProvider.ZHIPU]: ProviderSettings;
+			[AIProvider.OPENAI]: ProviderSettings;
+			[AIProvider.DEEPSEEK]: ProviderSettings;
+			[AIProvider.GEMINI]: ProviderSettings;
+		};
 	};
 
 	// 其他配置
@@ -61,21 +69,41 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 	visionModel: 'glm-4.5v',
 
 	providers: {
-		[AIProvider.ZHIPU]: {
-			apiKey: '',
-			baseUrl: 'https://open.bigmodel.cn/api/paas/v4'
+		text: {
+			[AIProvider.ZHIPU]: {
+				apiKey: '',
+				baseUrl: 'https://open.bigmodel.cn/api/paas/v4'
+			},
+			[AIProvider.OPENAI]: {
+				apiKey: '',
+				baseUrl: 'https://api.openai.com/v1'
+			},
+			[AIProvider.DEEPSEEK]: {
+				apiKey: '',
+				baseUrl: 'https://api.deepseek.com/v1'
+			},
+			[AIProvider.GEMINI]: {
+				apiKey: '',
+				baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai'
+			}
 		},
-		[AIProvider.OPENAI]: {
-			apiKey: '',
-			baseUrl: 'https://api.openai.com/v1'
-		},
-		[AIProvider.DEEPSEEK]: {
-			apiKey: '',
-			baseUrl: 'https://api.deepseek.com/v1'
-		},
-		[AIProvider.GEMINI]: {
-			apiKey: '',
-			baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai'
+		vision: {
+			[AIProvider.ZHIPU]: {
+				apiKey: '',
+				baseUrl: 'https://open.bigmodel.cn/api/paas/v4'
+			},
+			[AIProvider.OPENAI]: {
+				apiKey: '',
+				baseUrl: 'https://api.openai.com/v1'
+			},
+			[AIProvider.DEEPSEEK]: {
+				apiKey: '',
+				baseUrl: 'https://api.deepseek.com/v1'
+			},
+			[AIProvider.GEMINI]: {
+				apiKey: '',
+				baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai'
+			}
 		}
 	},
 

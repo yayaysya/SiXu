@@ -48,7 +48,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 		containerEl.createEl('h3', { text: '文本模型配置' });
 
 		const currentProvider = this.plugin.settings.textProvider;
-		const providerConfig = this.plugin.settings.providers[currentProvider];
+		const providerConfig = this.plugin.settings.providers.text[currentProvider];
 
 		// 1. 文本 AI 服务
 		new Setting(containerEl)
@@ -192,7 +192,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 		containerEl.createEl('h3', { text: '视觉模型配置' });
 
 		const currentProvider = this.plugin.settings.visionProvider;
-		const providerConfig = this.plugin.settings.providers[currentProvider];
+		const providerConfig = this.plugin.settings.providers.vision[currentProvider];
 
 		// 1. 视觉 AI 服务
 		new Setting(containerEl)
@@ -337,7 +337,9 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 		provider: AIProvider,
 		type: 'text' | 'vision'
 	): void {
-		const providerConfig = this.plugin.settings.providers[provider];
+		const providerConfig = type === 'text'
+			? this.plugin.settings.providers.text[provider]
+			: this.plugin.settings.providers.vision[provider];
 
 		// 默认 URL 映射
 		const defaultUrls = {

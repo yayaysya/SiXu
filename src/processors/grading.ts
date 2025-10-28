@@ -21,7 +21,7 @@ export class QuizGrader {
 	private getAIProvider(): UnifiedAIProvider {
 		const settings = this.plugin.settings;
 		const provider = settings.textProvider;
-		const config = settings.providers[provider];
+		const config = settings.providers.text[provider];
 		return new UnifiedAIProvider(provider, config.apiKey, config.baseUrl);
 	}
 
