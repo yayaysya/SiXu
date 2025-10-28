@@ -324,7 +324,8 @@ export default class NotebookLLMPlugin extends Plugin {
 	 */
 	async processCombinedNotes(
 		files: TFile[],
-		outputPath: string
+		outputPath: string,
+		onProgress?: (percent: number, status: string) => void
 	): Promise<void> {
 		// 验证 API Key
 		const textProviderConfig = this.settings.providers[this.settings.textProvider];
@@ -340,16 +341,22 @@ export default class NotebookLLMPlugin extends Plugin {
 			return;
 		}
 
-		// 创建任务
-		const task = this.taskQueue.createTask('组合笔记', outputPath);
+		// 如果没有提供进度回调，使用旧的任务队列系统
+		if (!onProgress) {
+			// 创建任务
+			const task = this.taskQueue.createTask('组合笔记', outputPath);
 
-		// 注册进度回调
-		this.taskQueue.onProgress(task.id, (progress, status, message) => {
-			this.statusBarManager.showTaskStatus(task.id, status, progress, message);
-		});
+			// 注册进度回调
+			this.taskQueue.onProgress(task.id, (progress, status, message) => {
+				this.statusBarManager.showTaskStatus(task.id, status, progress, message);
+			});
 
-		// 后台处理
-		this.processCombinedNotesInBackground(files, task.id, outputPath);
+			// 后台处理
+			this.processCombinedNotesInBackground(files, null, outputPath, onProgress);
+		} else {
+			// 使用新的进度回调系统
+			await this.processCombinedNotesInBackground(files, null, outputPath, onProgress);
+		}
 	}
 
 	/**
@@ -357,8 +364,9 @@ export default class NotebookLLMPlugin extends Plugin {
 	 */
 	private async processCombinedNotesInBackground(
 		files: TFile[],
-		taskId: string,
-		outputPath: string
+		taskId: string | null,
+		outputPath: string,
+		onProgress?: (percent: number, status: string) => void
 	): Promise<void> {
 		try {
 			// 初始化 AI 和处理器
@@ -370,7 +378,10 @@ export default class NotebookLLMPlugin extends Plugin {
 			const textProcessor = new TextProcessor(textProvider, this.settings.textModel);
 
 			// 1. 分别解析每个文件
-			this.taskQueue.updateProgress(taskId, 10, TaskStatus.PARSING, '解析笔记文件中...');
+			if (taskId) {
+				this.taskQueue.updateProgress(taskId, 10, TaskStatus.PARSING, '解析笔记文件中...');
+			}
+			onProgress?.(10, '解析笔记文件中...');
 
 			const allContents: string[] = [];
 			const allImages: ImageInfo[] = [];
@@ -402,29 +413,44 @@ export default class NotebookLLMPlugin extends Plugin {
 			const combinedContent = allContents.join('\n\n---\n\n');
 
 			// 2. 处理图片
-			this.taskQueue.updateProgress(taskId, 20, TaskStatus.PROCESSING_IMAGES, '开始识别图片...');
+			if (taskId) {
+				this.taskQueue.updateProgress(taskId, 20, TaskStatus.PROCESSING_IMAGES, '开始识别图片...');
+			}
+			onProgress?.(20, '开始识别图片...');
 			const processedImages = await imageProcessor.processImages(
 				allImages,
 				(completed, total) => {
 					const progress = 20 + Math.floor((completed / total) * 30);
 					const message = `图片${completed}/${total} 理解中...`;
-					this.taskQueue.updateProgress(taskId, progress, undefined, message);
+					if (taskId) {
+						this.taskQueue.updateProgress(taskId, progress, undefined, message);
+					}
+					onProgress?.(progress, message);
 				}
 			);
 
 			// 3. 处理链接
-			this.taskQueue.updateProgress(taskId, 50, TaskStatus.PROCESSING_LINKS, '开始抓取链接内容...');
+			if (taskId) {
+				this.taskQueue.updateProgress(taskId, 50, TaskStatus.PROCESSING_LINKS, '开始抓取链接内容...');
+			}
+			onProgress?.(50, '开始抓取链接内容...');
 			const processedLinks = await linkProcessor.processLinks(
 				allLinks,
 				(completed, total) => {
 					const progress = 50 + Math.floor((completed / total) * 20);
 					const message = `链接${completed}/${total} 内容抓取中...`;
-					this.taskQueue.updateProgress(taskId, progress, undefined, message);
+					if (taskId) {
+						this.taskQueue.updateProgress(taskId, progress, undefined, message);
+					}
+					onProgress?.(progress, message);
 				}
 			);
 
 			// 4. 生成文章
-			this.taskQueue.updateProgress(taskId, 70, TaskStatus.GENERATING, '文章组合中...');
+			if (taskId) {
+				this.taskQueue.updateProgress(taskId, 70, TaskStatus.GENERATING, '文章组合中...');
+			}
+			onProgress?.(70, '文章组合中...');
 
 			// 获取选中的模板
 			const template = getTemplate(
@@ -454,7 +480,10 @@ export default class NotebookLLMPlugin extends Plugin {
 			);
 
 			// 5. 保存文件
-			this.taskQueue.updateProgress(taskId, 90, undefined, '保存文件中...');
+			if (taskId) {
+				this.taskQueue.updateProgress(taskId, 90, undefined, '保存文件中...');
+			}
+			onProgress?.(90, '保存文件中...');
 			const cleanedArticle = textProcessor.cleanArticle(article);
 
 			// 检查文件是否已存在
@@ -482,8 +511,11 @@ export default class NotebookLLMPlugin extends Plugin {
 			}
 
 			// 6. 完成
-			this.taskQueue.completeTask(taskId);
-			this.statusBarManager.hide();
+			if (taskId) {
+				this.taskQueue.completeTask(taskId);
+				this.statusBarManager.hide();
+			}
+			onProgress?.(100, '组合完成！');
 
 			// 显示完成通知
 			new Notice(`✅ 组合笔记整理完成!\n已保存至: ${outputPath}`, 5000);
@@ -495,9 +527,12 @@ export default class NotebookLLMPlugin extends Plugin {
 			}
 		} catch (error) {
 			console.error('处理组合笔记失败:', error);
-			this.taskQueue.failTask(taskId, error.message);
-			this.statusBarManager.hide();
+			if (taskId) {
+				this.taskQueue.failTask(taskId, error.message);
+				this.statusBarManager.hide();
+			}
 			new Notice(`❌ 处理失败: ${error.message}`, 5000);
+			throw error; // 重新抛出错误，让调用者可以处理
 		}
 	}
 }

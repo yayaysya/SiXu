@@ -39,7 +39,8 @@ export class QuizGenerator {
 	 */
 	async generateQuizFromFile(
 		sourceFile: TFile,
-		options: QuizGeneratorOptions = {}
+		options: QuizGeneratorOptions = {},
+		onProgress?: (percent: number, status: string) => void
 	): Promise<TFile> {
 		const {
 			difficulty = '中等',
@@ -48,12 +49,14 @@ export class QuizGenerator {
 		} = options;
 
 		// 读取源文件内容
+		onProgress?.(5, '正在读取文档内容...');
 		const content = await this.app.vault.read(sourceFile);
 
 		// 移除YAML Front Matter
 		const textContent = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
 
 		// 构建生成提示词
+		onProgress?.(15, '正在分析文档结构...');
 		const prompt = this.buildGenerationPrompt(
 			textContent,
 			sourceFile.basename,
@@ -63,6 +66,7 @@ export class QuizGenerator {
 		);
 
 		// 调用AI生成题目
+		onProgress?.(25, '正在通过AI生成试题...');
 		const aiProvider = this.getAIProvider();
 		const response = await aiProvider.generateText(
 			'你是一个专业的教育工作者，擅长根据学习材料生成高质量的测验题目。',
@@ -75,6 +79,7 @@ export class QuizGenerator {
 		);
 
 		// 解析AI生成的题目
+		onProgress?.(75, '正在解析生成的试题...');
 		const questions = this.parseGeneratedQuestions(response);
 
 		if (questions.length === 0) {
@@ -82,6 +87,7 @@ export class QuizGenerator {
 		}
 
 		// 生成Quiz文件
+		onProgress?.(85, '正在创建试题文件...');
 		const quizFile = await this.createQuizFile(
 			sourceFile,
 			questions,
@@ -90,8 +96,10 @@ export class QuizGenerator {
 		);
 
 		// 更新源文件的quiz_files字段
+		onProgress?.(95, '正在更新源文件记录...');
 		await this.updateSourceFileQuizzes(sourceFile, quizFile);
 
+		onProgress?.(100, '试题生成完成！');
 		return quizFile;
 	}
 
@@ -115,7 +123,7 @@ export class QuizGenerator {
 		const typesDesc = questionTypes.map(t => typeDescriptions[t]).join('\n- ');
 		const questionsPerType = Math.ceil(totalQuestions / questionTypes.length);
 
-		return `请根据以下学习材料生成${totalQuestions}道测验题目。
+		return `请仔细阅读并完全理解文章的核心观点、关键信息、重要术语、论证逻辑和支撑细节。根据学习材料生成${totalQuestions}道测验题目。
 
 **学习材料**：《${sourceName}》
 ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截断)' : ''}
@@ -129,7 +137,9 @@ ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截
 4. 题目要求：
    - 覆盖材料的核心知识点
    - 题目表述清晰准确
-   - 选择题的干扰项要有一定迷惑性
+   - 选择题的干扰项要有一定迷惑性, 应考察对基本概念和关键信息的准确记忆.
+   - 填空题:应针对文章中的核心定义、关键短语或重要数据进行设问
+   - 简答题: 题目应考察深层次的理解、分析、归纳或应用能力，要求用自己的话进行解释或论述，而不仅仅是复制原文。
    - 答案准确无误
    - 提供详细的解析说明
 
@@ -187,6 +197,7 @@ ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截
 - **单选题的answer是单个字母（如 "A"，不要带句点和内容）**
 - **多选题的answer是字母数组（如 ["A", "C"]，不要带句点和内容）**
 - 填空题和简答题不需要options字段
+- **题目顺序: 请按照 “单选题 -> 多选题 -> 填空题 -> 简答题” 的顺序组织试卷结构。**
 `;
 	}
 

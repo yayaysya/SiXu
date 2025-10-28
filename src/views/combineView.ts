@@ -3,6 +3,7 @@ import NotebookLLMPlugin from '../main';
 import { CombineNoteItem, QuizQuestion, QuizQuestionResult, QuizData } from '../types';
 import { StatisticsManager } from '../utils/statistics';
 import { Activity, getActivityTypeLabel, getActivityTypeIcon } from '../types/activity';
+import { ProgressCard } from '../components/ProgressCard';
 
 export const COMBINE_VIEW_TYPE = 'notebook-llm-combine-view';
 
@@ -53,6 +54,10 @@ export class CombineNotesView extends ItemView {
 	private currentQuizResults: QuizQuestionResult[] = [];
 	private currentResultFile: TFile | null = null;
 
+	// 进度卡片相关状态
+	private progressCard: ProgressCard | null = null;
+	private isCancelled: boolean = false;
+
 	constructor(leaf: WorkspaceLeaf, plugin: NotebookLLMPlugin) {
 		super(leaf);
 		this.plugin = plugin;
@@ -74,7 +79,6 @@ export class CombineNotesView extends ItemView {
 	async onOpen(): Promise<void> {
 		const container = this.containerEl;
 		container.empty();
-		container.addClass('notebook-llm-combine-view');
 
 		// 监听文件切换事件
 		this.fileChangeEventRef = this.plugin.app.workspace.on('active-leaf-change', () => {
@@ -392,13 +396,53 @@ export class CombineNotesView extends ItemView {
 			const outputFileName = `组合笔记_${today}.md`;
 			const outputPath = outputFileName;
 
-			// 调用主插件的处理逻辑，传递文件数组
-			await this.plugin.processCombinedNotes(files, outputPath);
+			// 重置取消标志
+			this.isCancelled = false;
 
-			new Notice(`组合笔记已开始处理，输出文件：${outputFileName}`);
+			// 创建进度卡片
+			const contentArea = this.containerEl.querySelector('.view-content-area');
+			if (!contentArea) return;
+
+			this.progressCard = new ProgressCard(contentArea as HTMLElement, {
+				title: '笔记整理中',
+				onCancel: () => {
+					this.isCancelled = true;
+					this.progressCard?.destroy();
+					this.progressCard = null;
+					new Notice('已取消整理');
+				},
+				onBackground: () => {
+					this.progressCard?.hide();
+					new Notice('笔记正在后台整理，完成后会通知您');
+				}
+			});
+			this.progressCard.show();
+			this.progressCard.updateProgress(0, '准备中...');
+
+			// 调用主插件的处理逻辑，传递文件数组和进度回调
+			await this.plugin.processCombinedNotes(
+				files,
+				outputPath,
+				(percent: number, status: string) => {
+					if (this.isCancelled) {
+						throw new Error('User cancelled');
+					}
+					this.progressCard?.updateProgress(percent, status);
+				}
+			);
+
+			// 完成，销毁进度卡片
+			this.progressCard?.destroy();
+			this.progressCard = null;
 		} catch (error) {
-			console.error('组合笔记失败:', error);
-			new Notice(`组合笔记失败: ${error.message}`);
+			// 清理进度卡片
+			this.progressCard?.destroy();
+			this.progressCard = null;
+
+			if (error.message !== 'User cancelled') {
+				console.error('组合笔记失败:', error);
+				new Notice(`组合笔记失败: ${error.message}`);
+			}
 		}
 	}
 
@@ -812,33 +856,61 @@ export class CombineNotesView extends ItemView {
 				return; // 用户取消
 			}
 
-			// 显示状态栏进度（带旋转动画）
-			const { TaskStatus } = await import('../types');
-			this.plugin.statusBarManager.showTaskStatus(
-				'quiz-generation',
-				TaskStatus.GENERATING,
-				0,
-				'试题生成中'
-			);
+			// 重置取消标志
+			this.isCancelled = false;
+
+			// 创建进度卡片
+			const contentArea = this.containerEl.querySelector('.view-content-area');
+			if (!contentArea) return;
+
+			this.progressCard = new ProgressCard(contentArea as HTMLElement, {
+				title: '试题生成中',
+				onCancel: () => {
+					this.isCancelled = true;
+					this.progressCard?.destroy();
+					this.progressCard = null;
+					new Notice('已取消生成');
+				},
+				onBackground: () => {
+					this.progressCard?.hide();
+					new Notice('试题正在后台生成，完成后会通知您');
+				}
+			});
+			this.progressCard.show();
+			this.progressCard.updateProgress(0, '准备中...');
 
 			// 使用QuizGenerator生成Quiz
 			const { QuizGenerator } = await import('../processors/quizGenerator');
 			const generator = new QuizGenerator(this.plugin.app, this.plugin);
-			const quizFile = await generator.generateQuizFromFile(sourceFile, options);
 
-			// 隐藏状态栏
-			this.plugin.statusBarManager.hide();
+			const quizFile = await generator.generateQuizFromFile(
+				sourceFile,
+				options,
+				(percent, status) => {
+					if (this.isCancelled) {
+						throw new Error('User cancelled');
+					}
+					this.progressCard?.updateProgress(percent, status);
+				}
+			);
+
+			// 完成，销毁进度卡片
+			this.progressCard?.destroy();
+			this.progressCard = null;
 
 			new Notice(`Quiz生成成功：${quizFile.basename}`);
 
 			// 刷新视图
 			this.render();
 		} catch (error) {
-			// 隐藏状态栏
-			this.plugin.statusBarManager.hide();
+			// 清理进度卡片
+			this.progressCard?.destroy();
+			this.progressCard = null;
 
-			console.error('生成Quiz失败:', error);
-			new Notice(`生成Quiz失败: ${error.message}`);
+			if (error.message !== 'User cancelled') {
+				console.error('生成Quiz失败:', error);
+				new Notice(`生成Quiz失败: ${error.message}`);
+			}
 		}
 	}
 
@@ -1104,21 +1176,48 @@ export class CombineNotesView extends ItemView {
 		}
 
 		try {
-			// 显示状态栏进度（带旋转动画）
-			const { TaskStatus } = await import('../types');
-			this.plugin.statusBarManager.showTaskStatus(
-				'quiz-grading',
-				TaskStatus.GENERATING,
-				0,
-				'评分中'
-			);
+			// 重置取消标志
+			this.isCancelled = false;
+
+			// 创建进度卡片
+			const contentArea = this.containerEl.querySelector('.view-content-area');
+			if (!contentArea) return;
+
+			this.progressCard = new ProgressCard(contentArea as HTMLElement, {
+				title: '评分中',
+				onCancel: () => {
+					this.isCancelled = true;
+					this.progressCard?.destroy();
+					this.progressCard = null;
+					new Notice('已取消评分');
+				},
+				onBackground: () => {
+					this.progressCard?.hide();
+					new Notice('正在后台评分，完成后会通知您');
+				}
+			});
+			this.progressCard.show();
+			this.progressCard.updateProgress(0, '准备中...');
 
 			// 使用QuizGrader评分
 			const { QuizGrader } = await import('../processors/grading');
 			const grader = new QuizGrader(this.plugin.app, this.plugin);
-			const results = await grader.gradeQuiz(this.currentQuestions, this.userAnswers);
+
+			this.progressCard.updateProgress(20, '正在评分...');
+			const results = await grader.gradeQuiz(
+				this.currentQuestions,
+				this.userAnswers,
+				(percent, status) => {
+					if (this.isCancelled) {
+						throw new Error('User cancelled');
+					}
+					// 评分占20%-80%
+					this.progressCard?.updateProgress(20 + percent * 0.6, status);
+				}
+			);
 
 			// 生成结果文件
+			this.progressCard.updateProgress(80, '正在生成结果文件...');
 			const { ResultGenerator } = await import('../processors/resultGenerator');
 			const generator = new ResultGenerator(this.plugin.app, this.plugin);
 			const resultFile = await generator.generateResultFile(
@@ -1128,24 +1227,30 @@ export class CombineNotesView extends ItemView {
 			);
 
 			// 更新quiz文件的quiz_results字段
+			this.progressCard.updateProgress(95, '正在更新测验记录...');
 			await this.updateQuizFileResults(this.currentQuizFile, resultFile);
 
-			// 隐藏状态栏
-			this.plugin.statusBarManager.hide();
+			// 完成，销毁进度卡片
+			this.progressCard?.destroy();
+			this.progressCard = null;
 
 			// 保存结果并切换到结果视图
 			this.currentQuizResults = results;
 			this.currentResultFile = resultFile;
 			this.quizViewState = 'result';
+			this.learningState = 'quiz-result';
 			this.render();
 
 			new Notice('评分完成！');
 		} catch (error) {
-			// 隐藏状态栏
-			this.plugin.statusBarManager.hide();
+			// 清理进度卡片
+			this.progressCard?.destroy();
+			this.progressCard = null;
 
-			console.error('提交答卷失败:', error);
-			new Notice(`提交答卷失败: ${error.message}`);
+			if (error.message !== 'User cancelled') {
+				console.error('提交答卷失败:', error);
+				new Notice(`提交答卷失败: ${error.message}`);
+			}
 		}
 	}
 
@@ -1320,6 +1425,7 @@ export class CombineNotesView extends ItemView {
 		const backBtn = actionsEl.createEl('button', { text: '返回列表' });
 		backBtn.addEventListener('click', () => {
 			this.quizViewState = 'list';
+			this.learningState = 'quiz-list';
 			this.render();
 		});
 

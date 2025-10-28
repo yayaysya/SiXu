@@ -110,12 +110,11 @@ button.mod-cta:hover {
 
 /* ===== 组合笔记侧边栏样式 ===== */
 
-/* 侧边栏容器 */
+/* 侧边栏容器（旧架构，保留兼容） */
 .notebook-llm-combine-view {
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: 10px;
 }
 
 /* 标题区域 */
@@ -1059,7 +1058,6 @@ button.mod-cta:hover {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
-    position: relative;
 }
 
 /* 内容区域 */
@@ -1067,20 +1065,16 @@ button.mod-cta:hover {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-bottom: 80px; /* 为底部导航栏和状态栏留空间 */
 }
 
 /* ===== 底部导航栏 ===== */
 .bottom-navigation {
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    right: 0;
+    flex-shrink: 0;
+    height: 100px;
     display: flex;
     background: var(--background-primary);
     border-top: 1px solid var(--background-modifier-border);
-    padding: 8px 0 4px;
-    z-index: 100;
+    padding: 8px 0 30px;
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 }
 
@@ -1359,10 +1353,7 @@ button.mod-cta:hover {
     padding: 20px;
 }
 
-/* 学习中心入口 */
-.learning-hub {
-    padding: 20px;
-}
+/* 学习中心入口 - 使用父容器(.learning-page)的padding */
 
 .learning-options {
     display: flex;
@@ -1616,3 +1607,116 @@ button.mod-cta:hover {
         gap: 12px;
     }
 }
+
+/* ===== 进度卡片 ===== */
+.progress-card-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.progress-card {
+    background: var(--background-primary);
+    border-radius: 12px;
+    padding: 32px;
+    min-width: 300px;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.progress-card-title {
+    font-size: 1.2em;
+    font-weight: 600;
+    margin-bottom: 16px;
+    text-align: center;
+    color: var(--text-normal);
+}
+
+.progress-card-spinner {
+    text-align: center;
+    margin-bottom: 16px;
+    font-size: 2em;
+    color: var(--interactive-accent);
+}
+
+.progress-card-spinner svg {
+    animation: spinner-rotate 1s linear infinite;
+    display: inline-block;
+}
+
+.progress-percent {
+    text-align: center;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: var(--interactive-accent);
+    margin-bottom: 8px;
+}
+
+.progress-bar-container {
+    background: var(--background-modifier-border);
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--interactive-accent);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.progress-status {
+    text-align: center;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    min-height: 20px;
+}
+
+.progress-card-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.progress-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.95em;
+    font-weight: 500;
+    border: none;
+}
+
+.progress-btn-background {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+}
+
+.progress-btn-background:hover {
+    background: var(--background-modifier-hover);
+}
+
+.progress-btn-cancel {
+    background: var(--text-error);
+    color: white;
+    border: 1px solid var(--text-error);
+}
+
+.progress-btn-cancel:hover {
+    opacity: 0.9;
+}
+

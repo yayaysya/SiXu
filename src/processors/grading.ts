@@ -30,11 +30,13 @@ export class QuizGrader {
 	 */
 	async gradeQuiz(
 		questions: QuizQuestion[],
-		userAnswers: Map<string, string | string[]>
+		userAnswers: Map<string, string | string[]>,
+		onProgress?: (percent: number, status: string) => void
 	): Promise<QuizQuestionResult[]> {
 		const results: QuizQuestionResult[] = [];
 
 		// 分离客观题和主观题
+		onProgress?.(5, '正在分析题目类型...');
 		const objectiveQuestions: QuizQuestion[] = [];
 		const subjectiveQuestions: QuizQuestion[] = [];
 
@@ -47,6 +49,7 @@ export class QuizGrader {
 		}
 
 		// 评分客观题（本地评分）
+		onProgress?.(15, `正在评分${objectiveQuestions.length}道客观题...`);
 		for (const question of objectiveQuestions) {
 			const result = this.gradeObjectiveQuestion(question, userAnswers.get(question.id));
 			results.push(result);
@@ -54,6 +57,7 @@ export class QuizGrader {
 
 		// 评分主观题（AI评分）
 		if (subjectiveQuestions.length > 0) {
+			onProgress?.(40, `正在通过AI评分${subjectiveQuestions.length}道主观题...`);
 			const aiResults = await this.gradeSubjectiveQuestions(
 				subjectiveQuestions,
 				userAnswers
@@ -61,6 +65,7 @@ export class QuizGrader {
 			results.push(...aiResults);
 		}
 
+		onProgress?.(100, '评分完成！');
 		return results;
 	}
 
