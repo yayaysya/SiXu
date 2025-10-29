@@ -42,6 +42,18 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 	}
 
 	/**
+	 * 重新渲染设置面板并保持滚动位置
+	 */
+	private redisplayWithScrollPreservation(): void {
+		const scrollTop = this.containerEl.scrollTop;
+		this.display();
+		// 使用 requestAnimationFrame 确保 DOM 更新完成后再恢复滚动位置
+		requestAnimationFrame(() => {
+			this.containerEl.scrollTop = scrollTop;
+		});
+	}
+
+	/**
 	 * 文本模型配置
 	 */
 	private displayTextModelSettings(containerEl: HTMLElement): void {
@@ -69,7 +81,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 							this.plugin.settings.textModel = models[0];
 						}
 						await this.plugin.saveSettings();
-						this.display(); // 重新渲染以显示新厂商的配置
+						this.redisplayWithScrollPreservation(); // 重新渲染以显示新厂商的配置
 					});
 			});
 
@@ -93,7 +105,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 						if (value !== 'custom') {
 							this.plugin.settings.textModel = value;
 							await this.plugin.saveSettings();
-							this.display(); // 切换到标准模式
+							this.redisplayWithScrollPreservation(); // 切换到标准模式
 						}
 					});
 				})
@@ -119,7 +131,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 					dropdown.onChange(async (value) => {
 						if (value === 'custom') {
 							this.plugin.settings.textModel = ''; // 清空以进入自定义模式
-							this.display(); // 切换到自定义模式
+							this.redisplayWithScrollPreservation(); // 切换到自定义模式
 						} else {
 							this.plugin.settings.textModel = value;
 							await this.plugin.saveSettings();
@@ -213,7 +225,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 							this.plugin.settings.visionModel = models[0];
 						}
 						await this.plugin.saveSettings();
-						this.display(); // 重新渲染以显示新厂商的配置
+						this.redisplayWithScrollPreservation(); // 重新渲染以显示新厂商的配置
 					});
 			});
 
@@ -237,7 +249,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 						if (value !== 'custom') {
 							this.plugin.settings.visionModel = value;
 							await this.plugin.saveSettings();
-							this.display(); // 切换到标准模式
+							this.redisplayWithScrollPreservation(); // 切换到标准模式
 						}
 					});
 				})
@@ -263,7 +275,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 					dropdown.onChange(async (value) => {
 						if (value === 'custom') {
 							this.plugin.settings.visionModel = ''; // 清空以进入自定义模式
-							this.display(); // 切换到自定义模式
+							this.redisplayWithScrollPreservation(); // 切换到自定义模式
 						} else {
 							this.plugin.settings.visionModel = value;
 							await this.plugin.saveSettings();
@@ -455,7 +467,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 						.onClick(async () => {
 							this.plugin.settings.customPromptTemplates.splice(index, 1);
 							await this.plugin.saveSettings();
-							this.display();
+							this.redisplayWithScrollPreservation();
 						}));
 			});
 		}
@@ -498,7 +510,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 			async (template) => {
 				this.plugin.settings.customPromptTemplates.push(template);
 				await this.plugin.saveSettings();
-				this.display();
+				this.redisplayWithScrollPreservation();
 			}
 		);
 		modal.open();
@@ -515,7 +527,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 			async (updatedTemplate) => {
 				this.plugin.settings.customPromptTemplates[index] = updatedTemplate;
 				await this.plugin.saveSettings();
-				this.display();
+				this.redisplayWithScrollPreservation();
 			}
 		);
 		modal.open();
