@@ -1,5 +1,8 @@
 import { AIProvider } from '../types';
 
+// 调试回调（由 DebugMarkdownLogger 间接提供）
+type DebugAppendFn = (title: string, content: any) => void;
+
 /**
  * 统一 AI Provider
  * 所有厂商都使用 OpenAI 兼容格式
@@ -8,11 +11,13 @@ export class UnifiedAIProvider {
 	private apiKey: string;
 	private baseUrl: string;
 	private provider: AIProvider;
+    private debugAppend?: DebugAppendFn;
 
-	constructor(provider: AIProvider, apiKey: string, baseUrl: string) {
+    constructor(provider: AIProvider, apiKey: string, baseUrl: string, debugAppend?: DebugAppendFn) {
 		this.provider = provider;
 		this.apiKey = apiKey;
 		this.baseUrl = baseUrl;
+        this.debugAppend = debugAppend;
 	}
 
 	/**
@@ -30,6 +35,18 @@ export class UnifiedAIProvider {
 		const url = `${this.baseUrl}/chat/completions`;
 
 		try {
+            // Debug: 请求
+            try {
+                this.debugAppend?.('AI 请求', {
+                    provider: this.provider,
+                    url,
+                    model: config.model,
+                    temperature: config.temperature,
+                    max_tokens: config.max_tokens,
+                    messages: config.messages
+                });
+            } catch {}
+
 			const response = await fetch(url, {
 				method: 'POST',
 				headers: {
@@ -45,9 +62,26 @@ export class UnifiedAIProvider {
 			}
 
 			const data = await response.json();
+            try {
+                const content = data?.choices?.[0]?.message?.content;
+                if (content) {
+                    this.debugAppend?.('AI 返回', {
+                        provider: this.provider,
+                        model: config.model,
+                        content
+                    });
+                }
+            } catch {}
 			return data;
 		} catch (error) {
 			console.error(`${this.provider} API调用失败:`, error);
+            try {
+                this.debugAppend?.('AI 调用错误', {
+                    provider: this.provider,
+                    model: config.model,
+                    message: (error as any)?.message || String(error)
+                });
+            } catch {}
 			throw error;
 		}
 	}

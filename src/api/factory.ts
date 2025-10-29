@@ -1,10 +1,11 @@
 import { UnifiedAIProvider } from './unified';
 import { NotebookLLMSettings, AIProvider } from '../types';
+import { DebugMarkdownLogger } from '../utils/DebugMarkdown';
 
 /**
  * 创建文本生成 Provider
  */
-export function createTextProvider(settings: NotebookLLMSettings): UnifiedAIProvider {
+export function createTextProvider(settings: NotebookLLMSettings, debug?: DebugMarkdownLogger): UnifiedAIProvider {
 	const provider = settings.textProvider;
 	const config = settings.providers.text[provider];
 	const model = settings.textModel;
@@ -13,13 +14,13 @@ export function createTextProvider(settings: NotebookLLMSettings): UnifiedAIProv
 		throw new Error(`${provider} 的 API Key 未配置`);
 	}
 
-	return new UnifiedAIProvider(provider, config.apiKey, config.baseUrl);
+	return new UnifiedAIProvider(provider, config.apiKey, config.baseUrl, debug ? (title, content) => debug.appendSection(title, content) : undefined);
 }
 
 /**
  * 创建视觉识别 Provider
  */
-export function createVisionProvider(settings: NotebookLLMSettings): UnifiedAIProvider {
+export function createVisionProvider(settings: NotebookLLMSettings, debug?: DebugMarkdownLogger): UnifiedAIProvider {
 	const provider = settings.visionProvider;
 	const config = settings.providers.vision[provider];
 	const model = settings.visionModel;
@@ -28,7 +29,7 @@ export function createVisionProvider(settings: NotebookLLMSettings): UnifiedAIPr
 		throw new Error(`${provider} 的 API Key 未配置`);
 	}
 
-	return new UnifiedAIProvider(provider, config.apiKey, config.baseUrl);
+	return new UnifiedAIProvider(provider, config.apiKey, config.baseUrl, debug ? (title, content) => debug.appendSection(title, content) : undefined);
 }
 
 /**

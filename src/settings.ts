@@ -142,8 +142,8 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 
 		// 3. API 密钥（带文档链接）
 		const docUrls = {
-			[AIProvider.ZHIPU]: 'https://openai.com/zh-Hans-CN/api/',
-			[AIProvider.OPENAI]: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
+			[AIProvider.ZHIPU]: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
+			[AIProvider.OPENAI]: 'https://openai.com/zh-Hans-CN/api/',
 			[AIProvider.DEEPSEEK]: 'https://platform.deepseek.com/usage',
 			[AIProvider.GEMINI]: 'https://aistudio.google.com/api-keys'
 		};
@@ -408,6 +408,17 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 				.setDynamicTooltip()
 				.onChange(async (value) => {
 					this.plugin.settings.concurrency = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// 调试模式
+		new Setting(containerEl)
+			.setName('调试模式')
+			.setDesc('开启后，每次 AI 整理会在笔记库根目录 sixu_debugger/ 生成单个 Markdown 调试日志，记录提示词与返回（适度截断，自动脱敏）。')
+			.addToggle(toggle => toggle
+				.setValue(!!this.plugin.settings.debugEnabled)
+				.onChange(async (value) => {
+					this.plugin.settings.debugEnabled = value;
 					await this.plugin.saveSettings();
 				}));
 	}

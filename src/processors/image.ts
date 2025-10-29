@@ -1,5 +1,6 @@
 import { ImageInfo } from '../types';
 import { UnifiedAIProvider } from '../api/unified';
+import { DebugMarkdownLogger } from '../utils/DebugMarkdown';
 
 /**
  * 图片处理器
@@ -7,10 +8,12 @@ import { UnifiedAIProvider } from '../api/unified';
 export class ImageProcessor {
 	private provider: UnifiedAIProvider;
 	private visionModel?: string;
+    private logger?: DebugMarkdownLogger;
 
-	constructor(provider: UnifiedAIProvider, visionModel?: string) {
+    constructor(provider: UnifiedAIProvider, visionModel?: string, logger?: DebugMarkdownLogger) {
 		this.provider = provider;
 		this.visionModel = visionModel;
+        this.logger = logger;
 	}
 
 	/**
@@ -18,11 +21,28 @@ export class ImageProcessor {
 	 */
 	async processImage(image: ImageInfo): Promise<ImageInfo> {
 		try {
+            // 调试：记录入参（不保存 dataURL）
+            try {
+                this.logger?.appendSection('图片识别-请求', {
+                    type: image.type,
+                    pathPreview: image.path?.slice(0, 120),
+                    alt: image.alt,
+                    originalMarkdown: image.originalMarkdown,
+                    model: this.visionModel
+                });
+            } catch {}
+
 			const description = await this.provider.recognizeImage(
 				image.path,
 				'请简洁描述这张图片的内容,用一两句话概括关键信息。',
 				this.visionModel
 			);
+
+            try {
+                this.logger?.appendSection('图片识别-返回', {
+                    description
+                });
+            } catch {}
 
 			return {
 				...image,

@@ -56,6 +56,9 @@ export interface NotebookLLMSettings {
 	// Quiz配置
 	quizDir: string;      // Quiz文件目录
 	resultDir: string;    // 结果文件目录
+
+  // 调试
+  debugEnabled?: boolean; // 开启后记录一次性调试日志
 }
 
 /**
@@ -118,6 +121,9 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 	// Quiz目录配置
 	quizDir: 'quiz',
 	resultDir: 'quiz/results'
+  ,
+  // 调试默认关闭
+  debugEnabled: false
 };
 
 /**

@@ -2,6 +2,7 @@ import { App, Plugin, TFile, Notice, MarkdownView, WorkspaceLeaf } from 'obsidia
 import { NotebookLLMSettings, DEFAULT_SETTINGS, TaskStatus, ImageInfo, LinkInfo } from './types';
 import { NotebookLLMSettingTab } from './settings';
 import { createTextProvider, createVisionProvider } from './api/factory';
+import { DebugMarkdownLogger } from './utils/DebugMarkdown';
 import { MarkdownParser } from './parsers/markdown';
 import { ImageProcessor } from './processors/image';
 import { LinkProcessor } from './processors/link';
@@ -235,15 +236,30 @@ export default class NotebookLLMPlugin extends Plugin {
 	/**
 	 * 后台处理笔记
 	 */
-	private async processNoteInBackground(file: TFile, taskId: string, outputPath: string) {
-		try {
-			// 初始化 AI 和处理器
-			const textProvider = createTextProvider(this.settings);
-			const visionProvider = createVisionProvider(this.settings);
+    private async processNoteInBackground(file: TFile, taskId: string, outputPath: string) {
+        let logger: DebugMarkdownLogger | undefined;
+        try {
+            // 初始化调试
+            logger = this.settings.debugEnabled ? new DebugMarkdownLogger(this.app, 'AI 整理调试日志') : undefined;
+            if (logger) {
+                logger.appendSection('运行上下文', {
+                    mode: 'single-note',
+                    sourceFile: file.path,
+                    textProvider: this.settings.textProvider,
+                    textModel: this.settings.textModel,
+                    visionProvider: this.settings.visionProvider,
+                    visionModel: this.settings.visionModel,
+                    template: this.settings.selectedPromptTemplate
+                });
+            }
+
+            // 初始化 AI 和处理器
+            const textProvider = createTextProvider(this.settings, logger);
+            const visionProvider = createVisionProvider(this.settings, logger);
 			const parser = new MarkdownParser(this.app);
-			const imageProcessor = new ImageProcessor(visionProvider, this.settings.visionModel);
-			const linkProcessor = new LinkProcessor(textProvider, this.settings.textModel);
-			const textProcessor = new TextProcessor(textProvider, this.settings.textModel);
+            const imageProcessor = new ImageProcessor(visionProvider, this.settings.visionModel, logger);
+            const linkProcessor = new LinkProcessor(textProvider, this.settings.textModel, logger);
+            const textProcessor = new TextProcessor(textProvider, this.settings.textModel, logger);
 
 			// 1. 解析 Markdown
 			this.taskQueue.updateProgress(taskId, 10, TaskStatus.PARSING, '解析笔记内容中...');
@@ -315,7 +331,7 @@ export default class NotebookLLMPlugin extends Plugin {
 				await this.app.vault.create(outputPath, cleanedArticle);
 			}
 
-			// 6. 完成
+            // 6. 完成
 			this.taskQueue.completeTask(taskId);
 			this.statusBarManager.hide();
 
@@ -327,11 +343,23 @@ export default class NotebookLLMPlugin extends Plugin {
 			if (newFile instanceof TFile) {
 				await this.app.workspace.getLeaf().openFile(newFile);
 			}
-		} catch (error) {
+            // 刷新日志
+            if (logger) {
+                await logger.flush();
+            }
+        } catch (error) {
 			console.error('处理笔记失败:', error);
 			this.taskQueue.failTask(taskId, error.message);
 			this.statusBarManager.hide();
 			new Notice(`❌ 处理失败: ${error.message}`, 5000);
+            // 刷新日志（失败场景）
+            // best-effort
+            try {
+                if (logger) {
+                    logger.appendSection('错误', { message: (error as any)?.message || String(error) });
+                    await logger.flush();
+                }
+            } catch {}
 		}
 	}
 
@@ -412,20 +440,35 @@ export default class NotebookLLMPlugin extends Plugin {
 	/**
 	 * 后台处理组合笔记
 	 */
-	private async processCombinedNotesInBackground(
+    private async processCombinedNotesInBackground(
 		files: TFile[],
 		taskId: string | null,
 		outputPath: string,
 		onProgress?: (percent: number, status: string) => void
 	): Promise<void> {
-		try {
-			// 初始化 AI 和处理器
-			const textProvider = createTextProvider(this.settings);
-			const visionProvider = createVisionProvider(this.settings);
+        let logger: DebugMarkdownLogger | undefined;
+        try {
+            // 初始化调试
+            logger = this.settings.debugEnabled ? new DebugMarkdownLogger(this.app, '组合笔记调试日志') : undefined;
+            if (logger) {
+                logger.appendSection('运行上下文', {
+                    mode: 'combined-notes',
+                    files: files.map(f => f.path),
+                    textProvider: this.settings.textProvider,
+                    textModel: this.settings.textModel,
+                    visionProvider: this.settings.visionProvider,
+                    visionModel: this.settings.visionModel,
+                    template: this.settings.selectedPromptTemplate
+                });
+            }
+
+            // 初始化 AI 和处理器
+            const textProvider = createTextProvider(this.settings, logger);
+            const visionProvider = createVisionProvider(this.settings, logger);
 			const parser = new MarkdownParser(this.app);
-			const imageProcessor = new ImageProcessor(visionProvider, this.settings.visionModel);
-			const linkProcessor = new LinkProcessor(textProvider, this.settings.textModel);
-			const textProcessor = new TextProcessor(textProvider, this.settings.textModel);
+            const imageProcessor = new ImageProcessor(visionProvider, this.settings.visionModel, logger);
+            const linkProcessor = new LinkProcessor(textProvider, this.settings.textModel, logger);
+            const textProcessor = new TextProcessor(textProvider, this.settings.textModel, logger);
 
 			// 1. 分别解析每个文件
 			if (taskId) {
@@ -560,7 +603,7 @@ export default class NotebookLLMPlugin extends Plugin {
 				await this.app.vault.create(outputPath, cleanedArticle);
 			}
 
-			// 6. 完成
+            // 6. 完成
 			if (taskId) {
 				this.taskQueue.completeTask(taskId);
 				this.statusBarManager.hide();
@@ -570,11 +613,15 @@ export default class NotebookLLMPlugin extends Plugin {
 			// 显示完成通知
 			new Notice(`✅ 组合笔记整理完成!\n已保存至: ${outputPath}`, 5000);
 
-			// 打开新文件
+            // 打开新文件
 			const newFile = this.app.vault.getAbstractFileByPath(outputPath);
 			if (newFile instanceof TFile) {
 				await this.app.workspace.getLeaf().openFile(newFile);
 			}
+
+            if (logger) {
+                await logger.flush();
+            }
 		} catch (error) {
 			console.error('处理组合笔记失败:', error);
 			if (taskId) {
@@ -582,7 +629,13 @@ export default class NotebookLLMPlugin extends Plugin {
 				this.statusBarManager.hide();
 			}
 			new Notice(`❌ 处理失败: ${error.message}`, 5000);
-			throw error; // 重新抛出错误，让调用者可以处理
+            try {
+                if (logger) {
+                    logger.appendSection('错误', { message: (error as any)?.message || String(error) });
+                    await logger.flush();
+                }
+            } catch {}
+            throw error; // 重新抛出错误，让调用者可以处理
 		}
 	}
 

@@ -932,13 +932,22 @@ export class CombineNotesView extends ItemView {
 				}
 			);
 
-			// 完成，销毁进度卡片
+			// 完成：记录是否为前台等待（未选择“后台运行”）
+			const wasForeground = this.progressCard?.isShown?.() === true;
+			// 销毁进度卡片
 			this.progressCard?.destroy();
 			this.progressCard = null;
 
 			new Notice(`Quiz生成成功：${quizFile.basename}`);
 
-			// 刷新视图
+			// 生成完成后：若用户在前台等待，则自动跳转到“学习 → 试题列表”
+			if (wasForeground) {
+				this.quizViewState = 'list';
+				this.learningState = 'quiz-list';
+				this.currentPage = 'learning';
+			}
+
+			// 刷新视图（确保列表立即显示新试题）
 			this.render();
 		} catch (error) {
 			// 清理进度卡片

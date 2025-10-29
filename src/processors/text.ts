@@ -1,6 +1,7 @@
 import { ImageInfo, LinkInfo, PromptTemplate, ParsedMarkdown } from '../types';
 import { UnifiedAIProvider } from '../api/unified';
 import { buildSystemPrompt } from '../prompts/templates';
+import { DebugMarkdownLogger } from '../utils/DebugMarkdown';
 
 /**
  * 文本整合处理器
@@ -8,10 +9,12 @@ import { buildSystemPrompt } from '../prompts/templates';
 export class TextProcessor {
 	private provider: UnifiedAIProvider;
 	private textModel?: string;
+    private logger?: DebugMarkdownLogger;
 
-	constructor(provider: UnifiedAIProvider, textModel?: string) {
+    constructor(provider: UnifiedAIProvider, textModel?: string, logger?: DebugMarkdownLogger) {
 		this.provider = provider;
 		this.textModel = textModel;
+        this.logger = logger;
 	}
 
 	/**
@@ -50,7 +53,7 @@ export class TextProcessor {
 			};
 		});
 
-		// 填充模板
+        // 填充模板
 		const prompts = this.fillSmartTemplate(
 			template,
 			originalContent,
@@ -59,7 +62,16 @@ export class TextProcessor {
 			metadata
 		);
 
-		// 调用 AI 生成文章
+        // 调试：记录提示词
+        try {
+            this.logger?.appendSection('文本整合-提示词', {
+                model: this.textModel,
+                system: prompts.system,
+                user: prompts.user
+            });
+        } catch {}
+
+        // 调用 AI 生成文章
 		const article = await this.provider.generateText(
 			prompts.system,
 			prompts.user,
@@ -70,7 +82,7 @@ export class TextProcessor {
 			}
 		);
 
-		// 添加失败的链接到参考引用部分
+        // 添加失败的链接到参考引用部分
 		let finalArticle = article;
 		if (failedLinks.length > 0) {
 			const referencesSection = this.buildReferencesSection(failedLinks);
@@ -82,8 +94,18 @@ export class TextProcessor {
 			finalArticle = this.ensureMetadata(finalArticle, metadata);
 		}
 
-		// 清理文章中的多余内容（包括多余的"链接"文字）
+        // 调试：记录原始输出
+        try {
+            this.logger?.appendSection('文本整合-原始输出(raw)', article);
+        } catch {}
+
+        // 清理文章中的多余内容（包括多余的"链接"文字）
 		finalArticle = this.cleanArticle(finalArticle);
+
+        // 调试：记录清理后
+        try {
+            this.logger?.appendSection('文本整合-清理后(cleaned)', finalArticle);
+        } catch {}
 
 		return finalArticle;
 	}

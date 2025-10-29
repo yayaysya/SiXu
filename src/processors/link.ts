@@ -1,5 +1,6 @@
 import { LinkInfo } from '../types';
 import { UnifiedAIProvider } from '../api/unified';
+import { DebugMarkdownLogger } from '../utils/DebugMarkdown';
 
 /**
  * 链接处理器
@@ -7,10 +8,12 @@ import { UnifiedAIProvider } from '../api/unified';
 export class LinkProcessor {
 	private provider: UnifiedAIProvider;
 	private textModel?: string;
+    private logger?: DebugMarkdownLogger;
 
-	constructor(provider: UnifiedAIProvider, textModel?: string) {
+    constructor(provider: UnifiedAIProvider, textModel?: string, logger?: DebugMarkdownLogger) {
 		this.provider = provider;
 		this.textModel = textModel;
+        this.logger = logger;
 	}
 
 	/**
@@ -32,7 +35,15 @@ export class LinkProcessor {
 			const html = await response.text();
 
 			// 简单提取文本内容(移除 HTML 标签)
-			const text = this.extractTextFromHtml(html);
+            const text = this.extractTextFromHtml(html);
+
+            // 调试：记录抓取后的正文片段
+            try {
+                this.logger?.appendSection('链接抓取', {
+                    url,
+                    extractedText: text?.slice(0, 4000) // 适度截断，logger内还有全局截断
+                });
+            } catch {}
 
 			// 限制长度,避免太长
 			return text.substring(0, 10000);
