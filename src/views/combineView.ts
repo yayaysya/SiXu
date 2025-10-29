@@ -3407,14 +3407,8 @@ export class CombineNotesView extends ItemView {
 			});
 		}
 
-		// 点击卡片翻转
-		card3d.addEventListener('click', (e) => {
-			// 如果点击的是按钮，不翻转
-			if ((e.target as HTMLElement).tagName === 'BUTTON') {
-				return;
-			}
-			this.toggleCardFlip(card3d);
-		});
+		// 注意：点击翻转功能已集成到手势系统中（setupCardGestures）
+		// 不需要单独的click事件监听器
 
 		return card3d;
 	}
@@ -3423,11 +3417,66 @@ export class CombineNotesView extends ItemView {
 	 * 翻转卡片
 	 */
 	private toggleCardFlip(cardEl: HTMLElement): void {
-		if (cardEl.hasClass('flipped')) {
+		const wasFlipped = cardEl.hasClass('flipped');
+
+		// 移除进入动画类，避免与翻转动画冲突
+		cardEl.removeClass('enter');
+
+		// 诊断：检查翻转前的CSS状态
+		console.log('[FlashCard] 翻转前诊断', {
+			wasFlipped,
+			classList: cardEl.className,
+			hasFlippedClass: cardEl.classList.contains('flipped'),
+			// 检查CSS规则
+			cssRules: {
+				transform: window.getComputedStyle(cardEl).transform,
+				transformStyle: window.getComputedStyle(cardEl).transformStyle,
+				transition: window.getComputedStyle(cardEl).transition,
+				backfaceVisibility: window.getComputedStyle(cardEl).backfaceVisibility,
+				perspective: window.getComputedStyle(cardEl).perspective
+			},
+			// 检查父容器
+			parentPerspective: cardEl.parentElement ? window.getComputedStyle(cardEl.parentElement).perspective : 'no parent'
+		});
+
+		if (wasFlipped) {
 			cardEl.removeClass('flipped');
+			console.log('[FlashCard] 翻转：背面 → 正面');
 		} else {
 			cardEl.addClass('flipped');
+			console.log('[FlashCard] 翻转：正面 → 背面');
 		}
+
+		// 强制浏览器重新计算样式
+		void cardEl.offsetHeight;
+
+		// 诊断：检查翻转后CSS状态（延迟一帧确保CSS已应用）
+		setTimeout(() => {
+			console.log('[FlashCard] 翻转后诊断（50ms延迟）', {
+				nowFlipped: cardEl.hasClass('flipped'),
+				classList: cardEl.className,
+				hasFlippedClass: cardEl.classList.contains('flipped'),
+				cssRules: {
+					transform: window.getComputedStyle(cardEl).transform,
+					transformStyle: window.getComputedStyle(cardEl).transformStyle,
+					transition: window.getComputedStyle(cardEl).transition,
+					backfaceVisibility: window.getComputedStyle(cardEl).backfaceVisibility
+				},
+				// 检查子元素（正面和背面）
+				frontFace: {
+					transform: cardEl.querySelector('.card-front') ? 
+						window.getComputedStyle(cardEl.querySelector('.card-front')!).transform : 'not found',
+					backfaceVisibility: cardEl.querySelector('.card-front') ?
+						window.getComputedStyle(cardEl.querySelector('.card-front')!).backfaceVisibility : 'not found'
+				},
+				backFace: {
+					transform: cardEl.querySelector('.card-back') ?
+						window.getComputedStyle(cardEl.querySelector('.card-back')!).transform : 'not found',
+					backfaceVisibility: cardEl.querySelector('.card-back') ?
+						window.getComputedStyle(cardEl.querySelector('.card-back')!).backfaceVisibility : 'not found'
+				}
+			});
+		}, 50);
 	}
 
 	/**
@@ -3471,10 +3520,16 @@ export class CombineNotesView extends ItemView {
 		let dragStartTime = 0;
 
 		const handleDragStart = (e: MouseEvent | TouchEvent) => {
-			// 如果已翻转或点击的是按钮，不处理拖动
-			if (cardEl.hasClass('flipped') || (e.target as HTMLElement).tagName === 'BUTTON') {
+			// 只阻止按钮点击，允许翻转后的卡片继续响应
+			if ((e.target as HTMLElement).tagName === 'BUTTON') {
+				console.log('[FlashCard] 点击了按钮，忽略');
 				return;
 			}
+
+			console.log('[FlashCard] 开始拖动/点击', {
+				isFlipped: cardEl.hasClass('flipped'),
+				eventType: 'touches' in e ? 'touch' : 'mouse'
+			});
 
 			isDragging = true;
 			dragStartTime = Date.now();
@@ -3488,8 +3543,19 @@ export class CombineNotesView extends ItemView {
 			if (!isDragging) return;
 
 			e.preventDefault();
+			const prevX = currentX;
 			currentX = 'touches' in e ? e.touches[0].clientX : e.clientX;
 			const deltaX = currentX - startX;
+
+			// 只在移动超过5px时打印，避免日志过多
+			if (Math.abs(deltaX) > 5 && Math.abs(deltaX - (prevX - startX)) > 2) {
+				console.log('[FlashCard] 拖动中', {
+					deltaX,
+					prevX,
+					currentX,
+					startX
+				});
+			}
 
 			// 应用位移
 			cardEl.style.transform = `translateX(${deltaX}px) rotate(${deltaX * 0.1}deg)`;
@@ -3510,19 +3576,63 @@ export class CombineNotesView extends ItemView {
 		};
 
 		const handleDragEnd = async () => {
-			if (!isDragging) return;
+			console.log('[FlashCard] 拖动/点击结束', {
+				isDragging,
+				startX,
+				currentX,
+				deltaX: currentX - startX,
+				duration: Date.now() - dragStartTime
+			});
+
+			if (!isDragging) {
+				console.log('[FlashCard] isDragging为false，直接返回');
+				return;
+			}
 			isDragging = false;
 
 			const deltaX = currentX - startX;
+			const dragDuration = Date.now() - dragStartTime;
 			const threshold = 100; // 滑动阈值
 
 			cardEl.removeClass('dragging');
 			cardEl.removeClass('drag-left');
 			cardEl.removeClass('drag-right');
 
+			// 判断是点击还是拖拽
+			if (Math.abs(deltaX) < 5 && dragDuration < 200) {
+				// 这是点击操作，翻转卡片
+				console.log('[FlashCard] 判定为点击操作，执行翻转', {
+					deltaX,
+					duration: dragDuration,
+					wasFlipped: cardEl.hasClass('flipped')
+				});
+
+				// 完全移除内联transform，让CSS类生效
+				cardEl.style.removeProperty('transform');
+				cardEl.style.setProperty('--drag-opacity', '0');
+				
+				console.log('[FlashCard] 移除内联transform后，准备翻转', {
+					inlineTransform: cardEl.style.transform,
+					computedTransform: window.getComputedStyle(cardEl).transform
+				});
+				
+				this.toggleCardFlip(cardEl);
+
+				console.log('[FlashCard] 翻转完成', {
+					nowFlipped: cardEl.hasClass('flipped'),
+					inlineTransform: cardEl.style.transform,
+					computedTransform: window.getComputedStyle(cardEl).transform
+				});
+				return;
+			}
+
 			if (Math.abs(deltaX) >= threshold) {
 				// 超过阈值，触发评分
 				const rating = deltaX < 0 ? 0 : 3; // 左滑=忘记(0)，右滑=简单(3)
+				console.log('[FlashCard] 判定为滑动评分', {
+					deltaX,
+					rating
+				});
 
 				// 禁用按钮
 				const ratingButtons = this.containerEl.querySelector('.rating-buttons');
@@ -3536,7 +3646,9 @@ export class CombineNotesView extends ItemView {
 				await this.animateCardExit(rating as 0 | 3, cardId);
 			} else {
 				// 未超过阈值，回弹
-				cardEl.style.transform = '';
+				console.log('[FlashCard] 拖动距离不足，回弹', { deltaX });
+				// 完全移除内联transform，让CSS类生效
+				cardEl.style.removeProperty('transform');
 				cardEl.style.setProperty('--drag-opacity', '0');
 			}
 		};
