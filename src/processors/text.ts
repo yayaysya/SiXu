@@ -144,15 +144,17 @@ export class TextProcessor {
 
 		// 可用图片素材 - 修改提示语,强调这是素材不是内容
 		if (images.length > 0) {
-			promptParts.push("\n\n【以下是可用的图片,请在文章中合适位置自然插入,不要单独列出图片列表】\n\n");
+			promptParts.push("\n\n【图片素材 - AI识别的描述仅供你理解图片内容，不要将描述文字输出到文章中】\n\n");
 			images.forEach((img, i) => {
 				// 区分本地图片(Obsidian格式)和远程图片(标准markdown格式)
 				const formatNote = img.markdown.startsWith('![[')
 					? '(Obsidian本地图片格式,请保持原样)'
-					: '';
+					: '(标准Markdown图片格式)';
 				promptParts.push(
-					`图片${i + 1}: ${img.markdown} ${formatNote}\n` +
-					`描述: ${img.description}\n\n`
+					`图片${i + 1}:\n` +
+					`  Markdown格式: ${img.markdown} ${formatNote}\n` +
+					`  AI识别内容（仅供参考）: ${img.description}\n` +
+					`  使用说明: 在文章合适位置插入上述Markdown格式，不要输出AI识别内容\n\n`
 				);
 			});
 		}
