@@ -3,6 +3,7 @@ import { NotebookLLMSettings, DEFAULT_SETTINGS, TaskStatus, ImageInfo, LinkInfo 
 import { NotebookLLMSettingTab } from './settings';
 import { createTextProvider, createVisionProvider } from './api/factory';
 import { DebugMarkdownLogger } from './utils/DebugMarkdown';
+import { ensureDirectory } from './utils/fileUtils';
 import { MarkdownParser } from './parsers/markdown';
 import { ImageProcessor } from './processors/image';
 import { LinkProcessor } from './processors/link';
@@ -226,11 +227,18 @@ export default class NotebookLLMPlugin extends Plugin {
 	 * 生成输出文件路径
 	 */
 	private generateOutputPath(file: TFile): string {
-		const dir = file.parent?.path || '';
 		const baseName = file.basename;
 		const outputName = this.settings.outputFileNameTemplate.replace('{name}', baseName);
 
-		return dir ? `${dir}/${outputName}.md` : `${outputName}.md`;
+		// 根据配置选择输出位置
+		if (this.settings.noteOutputMode === 'custom' && this.settings.noteOutputPath) {
+			// 自定义输出目录
+			return `${this.settings.noteOutputPath}/${outputName}.md`;
+		} else {
+			// 默认：保存到源笔记所在目录
+			const dir = file.parent?.path || '';
+			return dir ? `${dir}/${outputName}.md` : `${outputName}.md`;
+		}
 	}
 
 	/**
@@ -328,6 +336,11 @@ export default class NotebookLLMPlugin extends Plugin {
 			if (existingFile instanceof TFile) {
 				await this.app.vault.modify(existingFile, cleanedArticle);
 			} else {
+				// 确保输出目录存在
+				const outputDir = outputPath.substring(0, outputPath.lastIndexOf('/')); 
+				if (outputDir) {
+					await ensureDirectory(this.app, outputDir);
+				}
 				await this.app.vault.create(outputPath, cleanedArticle);
 			}
 
@@ -600,6 +613,11 @@ export default class NotebookLLMPlugin extends Plugin {
 			if (existingFile instanceof TFile) {
 				await this.app.vault.modify(existingFile, cleanedArticle);
 			} else {
+				// 确保输出目录存在
+				const outputDir = outputPath.substring(0, outputPath.lastIndexOf('/')); 
+				if (outputDir) {
+					await ensureDirectory(this.app, outputDir);
+				}
 				await this.app.vault.create(outputPath, cleanedArticle);
 			}
 

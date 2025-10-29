@@ -508,14 +508,86 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 	private displayOutputSettings(containerEl: HTMLElement): void {
 		containerEl.createEl('h3', { text: '输出设置' });
 
+		// 1. 常规笔记输出位置
+		containerEl.createEl('h4', { text: '常规笔记输出位置' });
+		
+		new Setting(containerEl)
+			.setName('输出位置')
+			.setDesc('选择常规笔记处理后的保存位置')
+			.addDropdown(dropdown => {
+				dropdown
+					.addOption('source', '保存到源笔记所在目录（推荐）')
+					.addOption('custom', '保存到指定目录')
+					.setValue(this.plugin.settings.noteOutputMode)
+					.onChange(async (value: 'source' | 'custom') => {
+						this.plugin.settings.noteOutputMode = value;
+						await this.plugin.saveSettings();
+						this.redisplayWithScrollPreservation();
+					});
+			});
+
+		// 自定义输出目录输入框（条件显示）
+		if (this.plugin.settings.noteOutputMode === 'custom') {
+			new Setting(containerEl)
+				.setName('输出目录')
+				.setDesc('笔记处理结果保存到的目录路径，例如: AI整理结果')
+				.addText(text => text
+					.setPlaceholder('输入目录路径，例如: AI整理结果')
+					.setValue(this.plugin.settings.noteOutputPath || '')
+					.onChange(async (value) => {
+						this.plugin.settings.noteOutputPath = value.trim();
+						await this.plugin.saveSettings();
+					}));
+		}
+
+		// 2. 输出文件名模板
 		new Setting(containerEl)
 			.setName('输出文件名模板')
-			.setDesc('使用 {name} 代表原文件名,例如: {name}_AI整理')
+			.setDesc('使用 {name} 代表原文件名，例如: {name}_AI整理')
 			.addText(text => text
 				.setPlaceholder('{name}_AI整理')
 				.setValue(this.plugin.settings.outputFileNameTemplate)
 				.onChange(async (value) => {
 					this.plugin.settings.outputFileNameTemplate = value || '{name}_AI整理';
+					await this.plugin.saveSettings();
+				}));
+
+		// 3. 组合笔记输出目录
+		containerEl.createEl('h4', { text: '组合笔记输出位置' });
+
+		new Setting(containerEl)
+			.setName('组合笔记输出目录')
+			.setDesc('组合笔记保存的目录，空值表示保存到库根目录')
+			.addText(text => text
+				.setPlaceholder('空值表示库根目录')
+				.setValue(this.plugin.settings.combineNotesDir)
+				.onChange(async (value) => {
+					this.plugin.settings.combineNotesDir = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
+		// 4. Quiz 相关输出目录
+		containerEl.createEl('h4', { text: 'Quiz 输出位置' });
+
+		new Setting(containerEl)
+			.setName('Quiz 文件目录')
+			.setDesc('生成的 Quiz 文件保存目录')
+			.addText(text => text
+				.setPlaceholder('quiz')
+				.setValue(this.plugin.settings.quizDir)
+				.onChange(async (value) => {
+					this.plugin.settings.quizDir = value.trim() || 'quiz';
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Quiz 结果目录')
+			.setDesc('Quiz 考试结果保存目录')
+			.addText(text => text
+				.setPlaceholder('quiz/results')
+				.setValue(this.plugin.settings.resultDir)
+				.onChange(async (value) => {
+					this.plugin.settings.resultDir = value.trim() || 'quiz/results';
 					await this.plugin.saveSettings();
 				}));
 	}

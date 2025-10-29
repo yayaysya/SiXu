@@ -432,7 +432,9 @@ export class CombineNotesView extends ItemView {
 			// 生成输出文件名
 			const today = new Date().toISOString().split('T')[0];
 			const outputFileName = `组合笔记_${today}.md`;
-			const outputPath = outputFileName;
+			// 根据配置生成输出路径
+			const combineNotesDir = this.plugin.settings.combineNotesDir;
+			const outputPath = combineNotesDir ? `${combineNotesDir}/${outputFileName}` : outputFileName;
 
 			// 重置取消标志
 			this.isCancelled = false;

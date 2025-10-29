@@ -50,6 +50,11 @@ export interface NotebookLLMSettings {
 	selectedPromptTemplate: string;
 	customPromptTemplates: PromptTemplate[];
 
+	// 文件输出位置配置
+	noteOutputMode: 'source' | 'custom';  // source=源目录, custom=自定义目录
+	noteOutputPath?: string;               // 自定义输出目录路径
+	combineNotesDir: string;               // 组合笔记输出目录（空表示根目录）
+
 	// 组合笔记配置
 	combineNotes: CombineNoteItem[];
 
@@ -110,6 +115,11 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 	outputFileNameTemplate: '{name}_AI整理',
 	selectedPromptTemplate: 'default',
 	customPromptTemplates: [],
+
+	// 文件输出位置配置
+	noteOutputMode: 'source',
+	noteOutputPath: '',
+	combineNotesDir: '',
 
 	// 组合笔记默认为空
 	combineNotes: [],
