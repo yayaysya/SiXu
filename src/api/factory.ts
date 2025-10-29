@@ -22,10 +22,10 @@ export function createTextProvider(settings: NotebookLLMSettings, debug?: DebugM
  */
 export function createVisionProvider(settings: NotebookLLMSettings, debug?: DebugMarkdownLogger): UnifiedAIProvider {
 	const provider = settings.visionProvider;
-	const config = settings.providers.vision[provider];
+	const config = settings.providers.vision[provider as keyof typeof settings.providers.vision];
 	const model = settings.visionModel;
 
-	if (!config.apiKey) {
+	if (!config || !config.apiKey) {
 		throw new Error(`${provider} 的 API Key 未配置`);
 	}
 
@@ -94,9 +94,7 @@ export function getVisionModels(provider: AIProvider): string[] {
 				'gpt-4-vision-preview'
 			];
 		case AIProvider.DEEPSEEK:
-			return [
-				'deepseek-chat' // DeepSeek Chat 支持视觉
-			];
+			return []; // DeepSeek 不支持视觉图像理解
 		case AIProvider.GEMINI:
 			return  [
 				'gemini-2.5-pro',

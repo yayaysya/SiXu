@@ -204,7 +204,12 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 		containerEl.createEl('h3', { text: '视觉模型配置' });
 
 		const currentProvider = this.plugin.settings.visionProvider;
-		const providerConfig = this.plugin.settings.providers.vision[currentProvider];
+		let providerConfig = this.plugin.settings.providers.vision[currentProvider as keyof typeof this.plugin.settings.providers.vision];
+		
+		// 如果配置不存在（例如从旧配置升级），使用默认值
+		if (!providerConfig) {
+			providerConfig = { apiKey: '', baseUrl: '' };
+		}
 
 		// 1. 视觉 AI 服务
 		new Setting(containerEl)
@@ -214,7 +219,6 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 				dropdown
 					.addOption(AIProvider.ZHIPU, getProviderDisplayName(AIProvider.ZHIPU))
 					.addOption(AIProvider.OPENAI, getProviderDisplayName(AIProvider.OPENAI))
-					.addOption(AIProvider.DEEPSEEK, getProviderDisplayName(AIProvider.DEEPSEEK))
 					.addOption(AIProvider.GEMINI, getProviderDisplayName(AIProvider.GEMINI))
 					.setValue(currentProvider)
 					.onChange(async (value: AIProvider) => {
@@ -349,9 +353,14 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 		provider: AIProvider,
 		type: 'text' | 'vision'
 	): void {
-		const providerConfig = type === 'text'
+		let providerConfig = type === 'text'
 			? this.plugin.settings.providers.text[provider]
-			: this.plugin.settings.providers.vision[provider];
+			: this.plugin.settings.providers.vision[provider as keyof typeof this.plugin.settings.providers.vision];
+		
+		// 如果配置不存在（例如从旧配置升级或 DeepSeek 作为视觉提供商），使用默认值
+		if (!providerConfig) {
+			providerConfig = { apiKey: '', baseUrl: '' };
+		}
 
 		// 默认 URL 映射
 		const defaultUrls = {

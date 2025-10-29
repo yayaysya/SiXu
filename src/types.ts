@@ -39,7 +39,7 @@ export interface NotebookLLMSettings {
 		vision: {
 			[AIProvider.ZHIPU]: ProviderSettings;
 			[AIProvider.OPENAI]: ProviderSettings;
-			[AIProvider.DEEPSEEK]: ProviderSettings;
+			[AIProvider.DEEPSEEK]?: ProviderSettings; // DeepSeek 不支持视觉，但允许存储以兼容旧配置
 			[AIProvider.GEMINI]: ProviderSettings;
 		};
 	};
@@ -98,10 +98,6 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 			[AIProvider.OPENAI]: {
 				apiKey: '',
 				baseUrl: 'https://api.openai.com/v1'
-			},
-			[AIProvider.DEEPSEEK]: {
-				apiKey: '',
-				baseUrl: 'https://api.deepseek.com/v1'
 			},
 			[AIProvider.GEMINI]: {
 				apiKey: '',

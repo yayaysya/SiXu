@@ -192,14 +192,14 @@ export default class NotebookLLMPlugin extends Plugin {
 	async organizeNote(file: TFile) {
 		// 验证 API Key
 		const textProviderConfig = this.settings.providers.text[this.settings.textProvider];
-		const visionProviderConfig = this.settings.providers.vision[this.settings.visionProvider];
+		const visionProviderConfig = this.settings.providers.vision[this.settings.visionProvider as keyof typeof this.settings.providers.vision];
 
 		if (!textProviderConfig.apiKey) {
 			new Notice(`❌ 请先在设置中配置 ${this.settings.textProvider} 的 API Key`);
 			return;
 		}
 
-		if (!visionProviderConfig.apiKey) {
+		if (!visionProviderConfig?.apiKey) {
 			new Notice(`❌ 请先在设置中配置 ${this.settings.visionProvider} 的 API Key`);
 			return;
 		}
@@ -407,14 +407,14 @@ export default class NotebookLLMPlugin extends Plugin {
 	): Promise<void> {
 		// 验证 API Key
 		const textProviderConfig = this.settings.providers.text[this.settings.textProvider];
-		const visionProviderConfig = this.settings.providers.vision[this.settings.visionProvider];
+		const visionProviderConfig = this.settings.providers.vision[this.settings.visionProvider as keyof typeof this.settings.providers.vision];
 
 		if (!textProviderConfig.apiKey) {
 			new Notice(`❌ 请先在设置中配置 ${this.settings.textProvider} 的 API Key`);
 			return;
 		}
 
-		if (!visionProviderConfig.apiKey) {
+		if (!visionProviderConfig?.apiKey) {
 			new Notice(`❌ 请先在设置中配置 ${this.settings.visionProvider} 的 API Key`);
 			return;
 		}
