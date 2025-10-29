@@ -62,6 +62,13 @@ export interface NotebookLLMSettings {
 	quizDir: string;      // Quiz文件目录
 	resultDir: string;    // 结果文件目录
 
+	// 闪卡配置
+	flashcard?: {
+		deckDir: string;           // 闪卡组存储目录
+		newCardsPerDay: number;    // 每天新卡片数
+		reviewCardsPerDay: number; // 每天复习卡片数
+	};
+
   // 调试
   debugEnabled?: boolean; // 开启后记录一次性调试日志
 }
@@ -126,8 +133,15 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 
 	// Quiz目录配置
 	quizDir: 'quiz',
-	resultDir: 'quiz/results'
-  ,
+	resultDir: 'quiz/results',
+
+	// 闪卡默认配置
+	flashcard: {
+		deckDir: 'flashcards',
+		newCardsPerDay: 20,
+		reviewCardsPerDay: 200
+	},
+
   // 调试默认关闭
   debugEnabled: false
 };

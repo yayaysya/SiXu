@@ -39,6 +39,9 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 
 		// 输出设置
 		this.displayOutputSettings(containerEl);
+
+		// 闪卡设置
+		this.displayFlashcardSettings(containerEl);
 	}
 
 	/**
@@ -623,6 +626,66 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 			}
 		);
 		modal.open();
+	}
+
+	/**
+	 * 闪卡配置
+	 */
+	private displayFlashcardSettings(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: '闪卡配置' });
+
+		// 确保 flashcard 配置存在
+		if (!this.plugin.settings.flashcard) {
+			this.plugin.settings.flashcard = {
+				deckDir: 'flashcards',
+				newCardsPerDay: 20,
+				reviewCardsPerDay: 200
+			};
+		}
+
+		// 闪卡存储目录
+		new Setting(containerEl)
+			.setName('闪卡存储目录')
+			.setDesc('存储闪卡组数据的目录')
+			.addText(text => text
+				.setPlaceholder('flashcards')
+				.setValue(this.plugin.settings.flashcard?.deckDir || 'flashcards')
+				.onChange(async (value) => {
+					if (this.plugin.settings.flashcard) {
+						this.plugin.settings.flashcard.deckDir = value.trim() || 'flashcards';
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		// 每天新卡片数
+		new Setting(containerEl)
+			.setName('每天新卡片数')
+			.setDesc('每天学习的新卡片数量上限')
+			.addText(text => text
+				.setPlaceholder('20')
+				.setValue(String(this.plugin.settings.flashcard?.newCardsPerDay || 20))
+				.onChange(async (value) => {
+					const num = parseInt(value);
+					if (!isNaN(num) && num > 0 && this.plugin.settings.flashcard) {
+						this.plugin.settings.flashcard.newCardsPerDay = num;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		// 每天复习卡片数
+		new Setting(containerEl)
+			.setName('每天复习卡片数')
+			.setDesc('每天复习的卡片数量上限')
+			.addText(text => text
+				.setPlaceholder('200')
+				.setValue(String(this.plugin.settings.flashcard?.reviewCardsPerDay || 200))
+				.onChange(async (value) => {
+					const num = parseInt(value);
+					if (!isNaN(num) && num > 0 && this.plugin.settings.flashcard) {
+						this.plugin.settings.flashcard.reviewCardsPerDay = num;
+						await this.plugin.saveSettings();
+					}
+				}));
 	}
 }
 

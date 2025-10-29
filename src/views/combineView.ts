@@ -5,6 +5,9 @@ import { StatisticsManager } from '../utils/statistics';
 import { Activity, getActivityTypeLabel, getActivityTypeIcon } from '../types/activity';
 import { ProgressCard } from '../components/ProgressCard';
 import { formatNumber } from '../utils/format';
+import { FlashcardDeck, Flashcard } from '../flashcard/types';
+import { FlashcardStorage } from '../flashcard/FlashcardStorage';
+import { CreateDeckModal, ConfirmFlashcardsModal, MergeDecksModal } from '../flashcard/FlashcardDeckView';
 
 export const COMBINE_VIEW_TYPE = 'notebook-llm-combine-view';
 
@@ -16,7 +19,7 @@ type ViewPage = 'home' | 'organize' | 'learning' | 'profile';
 /**
  * 学习中心子页面状态
  */
-type LearningViewState = 'hub' | 'quiz-hub' | 'quiz-list' | 'quiz-exam' | 'quiz-result';
+type LearningViewState = 'hub' | 'quiz-hub' | 'quiz-list' | 'quiz-exam' | 'quiz-result' | 'flashcard-deck-list' | 'flashcard-study' | 'flashcard-create';
 
 /**
  * @deprecated 旧的Tab类型，保留用于兼容
@@ -77,6 +80,14 @@ export class CombineNotesView extends ItemView {
 	private userAnswers: Map<string, string | string[]> = new Map();
 	private currentQuizResults: QuizQuestionResult[] = [];
 	private currentResultFile: TFile | null = null;
+
+	// Flashcard相关状态
+	private selectedDeckIds: Set<string> = new Set();
+	private currentDeck: FlashcardDeck | null = null;
+	private currentCards: Flashcard[] = [];
+	private currentCardIndex: number = 0;
+	private studyStartTime: number = 0;
+	private deckSortMode: 'time' | 'name' | 'cards' = 'time';
 
 	// 进度卡片相关状态
 	private progressCard: ProgressCard | null = null;
@@ -1746,9 +1757,10 @@ export class CombineNotesView extends ItemView {
 		if (!this.statisticsManager) return;
 
 		// 获取统计数据
-		const [combineCount, quizStats] = await Promise.all([
+		const [combineCount, quizStats, flashcardStats] = await Promise.all([
 			this.statisticsManager.getCombinedNotesCount(),
-			this.statisticsManager.getQuizStatistics()
+			this.statisticsManager.getQuizStatistics(),
+			this.getFlashcardStatistics()
 		]);
 
 		// 卡片1：已组合笔记数量
@@ -1769,10 +1781,10 @@ export class CombineNotesView extends ItemView {
 		card3.createDiv({ cls: 'card-value', text: quizStats.completed.toString() });
 		card3.createDiv({ cls: 'card-label', text: '已完成测验' });
 
-		// 卡片4：闪卡练习（预留）
-		const card4 = grid.createDiv({ cls: 'dashboard-card disabled' });
+		// 卡片4：闪卡练习
+		const card4 = grid.createDiv({ cls: 'dashboard-card' });
 		card4.createDiv({ cls: 'card-icon', text: '📇' });
-		card4.createDiv({ cls: 'card-value', text: '0' });
+		card4.createDiv({ cls: 'card-value', text: flashcardStats.totalCards.toString() });
 		card4.createDiv({ cls: 'card-label', text: '闪卡练习' });
 	}
 
@@ -2699,6 +2711,15 @@ export class CombineNotesView extends ItemView {
 			case 'quiz-result':
 				this.renderResultView(container);
 				break;
+			case 'flashcard-deck-list':
+				this.renderFlashcardDeckList(container);
+				break;
+			case 'flashcard-study':
+				this.renderFlashcardStudy(container);
+				break;
+			case 'flashcard-create':
+				this.renderFlashcardCreate(container);
+				break;
 		}
 	}
 
@@ -2715,17 +2736,16 @@ export class CombineNotesView extends ItemView {
 		// 学习选项
 		const options = hub.createDiv({ cls: 'learning-options' });
 
-		// Flash Card（装修中）
-		const flashcardCard = options.createDiv({ cls: 'learning-card disabled' });
+		// Flash Card
+		const flashcardCard = options.createDiv({ cls: 'learning-card' });
 		const fcIcon = flashcardCard.createDiv({ cls: 'card-icon-large' });
 		fcIcon.setText('📇');
 		flashcardCard.createEl('h3', { text: '闪卡背诵' });
 		flashcardCard.createEl('p', { text: 'Flash Card 内容背诵' });
-		const fcBadge = flashcardCard.createDiv({ cls: 'badge-construction' });
-		fcBadge.setText('开发中');
 
 		flashcardCard.addEventListener('click', () => {
-			new Notice('闪卡功能正在开发中，敬请期待！');
+			this.learningState = 'flashcard-deck-list';
+			this.render();
 		});
 
 		// Quiz小试牛刀
@@ -2924,6 +2944,801 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染"我的"页面
 	 */
+	// ==================== 闪卡功能 ====================
+
+	/**
+	 * 渲染闪卡列表页
+	 */
+	private async renderFlashcardDeckList(container: HTMLElement): Promise<void> {
+		container.empty();
+
+		// 添加返回按钮的头部
+		const header = container.createDiv({ cls: 'page-header-with-back' });
+		const backBtn = header.createDiv({ cls: 'back-btn' });
+		setIcon(backBtn, 'arrow-left');
+		backBtn.addEventListener('click', () => {
+			this.learningState = 'hub';
+			this.render();
+		});
+
+		const titleSection = header.createDiv();
+		titleSection.createEl('h2', { text: '闪卡背诵', cls: 'page-title' });
+
+		// 排序按钮
+		const sortContainer = container.createDiv({ cls: 'flashcard-sort' });
+		sortContainer.createSpan({ text: '排序：' });
+
+		const timeBtn = sortContainer.createEl('button', {
+			text: '时间',
+			cls: this.deckSortMode === 'time' ? 'sort-btn active' : 'sort-btn'
+		});
+		timeBtn.addEventListener('click', () => {
+			this.deckSortMode = 'time';
+			this.render();
+		});
+
+		const nameBtn = sortContainer.createEl('button', {
+			text: '名称',
+			cls: this.deckSortMode === 'name' ? 'sort-btn active' : 'sort-btn'
+		});
+		nameBtn.addEventListener('click', () => {
+			this.deckSortMode = 'name';
+			this.render();
+		});
+
+		const cardsBtn = sortContainer.createEl('button', {
+			text: '卡片数',
+			cls: this.deckSortMode === 'cards' ? 'sort-btn active' : 'sort-btn'
+		});
+		cardsBtn.addEventListener('click', () => {
+			this.deckSortMode = 'cards';
+			this.render();
+		});
+
+		// 卡组列表容器
+		const deckContainer = container.createDiv({ cls: 'flashcard-deck-list' });
+
+		try {
+			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+			let decks = await storage.loadAllDecks();
+
+			// 应用排序
+			decks = this.sortDecks(decks);
+
+			if (decks.length === 0) {
+				const empty = deckContainer.createDiv({ cls: 'empty-state' });
+				empty.createEl('p', { text: '暂无闪卡组，请先创建一个卡组' });
+			} else {
+				// 渲染每个卡组
+				for (const deck of decks) {
+					this.renderDeckCard(deckContainer, deck, storage);
+				}
+			}
+
+			// 添加"创建新卡组"卡片
+			const createCard = deckContainer.createDiv({ cls: 'deck-card create-new' });
+			const icon = createCard.createDiv({ cls: 'deck-icon' });
+			icon.setText('➕');
+			createCard.createEl('h3', { text: '创建新卡组' });
+			createCard.createEl('p', { text: '从笔记生成学习卡片' });
+
+			createCard.addEventListener('click', () => {
+				this.openCreateDeckModal();
+			});
+
+			// 多选操作栏
+			if (this.selectedDeckIds.size > 0) {
+				this.renderMultiSelectActions(container, storage);
+			}
+
+		} catch (error) {
+			console.error('加载闪卡组失败:', error);
+			new Notice(`加载失败: ${error.message}`);
+		}
+	}
+
+	/**
+	 * 排序卡组
+	 */
+	private sortDecks(decks: FlashcardDeck[]): FlashcardDeck[] {
+		const sorted = [...decks];
+
+		if (this.deckSortMode === 'time') {
+			sorted.sort((a, b) => {
+				const timeA = a.stats.lastStudyTime || a.createdAt;
+				const timeB = b.stats.lastStudyTime || b.createdAt;
+				return timeB - timeA;
+			});
+		} else if (this.deckSortMode === 'name') {
+			sorted.sort((a, b) => a.name.localeCompare(b.name));
+		} else if (this.deckSortMode === 'cards') {
+			sorted.sort((a, b) => b.stats.total - a.stats.total);
+		}
+
+		return sorted;
+	}
+
+	/**
+	 * 渲染单个卡组卡片
+	 */
+	private renderDeckCard(container: HTMLElement, deck: FlashcardDeck, storage: FlashcardStorage): void {
+		const isSelected = this.selectedDeckIds.has(deck.id);
+		const card = container.createDiv({
+			cls: isSelected ? 'deck-card selected' : 'deck-card'
+		});
+
+		// 标题
+		const titleRow = card.createDiv({ cls: 'deck-title-row' });
+		titleRow.createEl('h3', { text: deck.name });
+
+		// 统计信息
+		const stats = card.createDiv({ cls: 'deck-stats' });
+		stats.createEl('span', { text: `📊 ${deck.stats.total} 张卡片` });
+		stats.createEl('span', { text: `✅ ${deck.stats.mastered} 张已掌握` });
+
+		// 进度条
+		const progressBar = card.createDiv({ cls: 'deck-progress-bar' });
+		const progressFill = progressBar.createDiv({ cls: 'deck-progress-fill' });
+		progressFill.style.width = `${deck.stats.masteryRate}%`;
+
+		// 详细分布
+		const distribution = card.createDiv({ cls: 'deck-distribution' });
+		distribution.createEl('span', { text: `新卡: ${deck.stats.new}` });
+		distribution.createEl('span', { text: `学习中: ${deck.stats.learning}` });
+		distribution.createEl('span', { text: `复习: ${deck.stats.review}` });
+
+		// 按钮区域
+		const actions = card.createDiv({ cls: 'deck-actions' });
+
+		const studyBtn = actions.createEl('button', { text: '开始学习', cls: 'deck-btn primary' });
+		studyBtn.addEventListener('click', async (e) => {
+			e.stopPropagation();
+			await this.startStudying(deck.id);
+		});
+
+		const selectBtn = actions.createEl('button', {
+			text: isSelected ? '✓ 已选' : '☐ 选择',
+			cls: 'deck-btn'
+		});
+		selectBtn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			this.toggleDeckSelection(deck.id);
+		});
+
+		const deleteBtn = actions.createEl('button', { text: '删除', cls: 'deck-btn' });
+		deleteBtn.addEventListener('click', async (e) => {
+			e.stopPropagation();
+			await this.deleteDeck(deck.id, storage);
+		});
+	}
+
+	/**
+	 * 开始学习卡组
+	 */
+	private async startStudying(deckId: string): Promise<void> {
+		try {
+			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+			const result = await storage.loadDeck(deckId);
+
+			if (!result) {
+				new Notice('卡组不存在');
+				return;
+			}
+
+			const { deck, cards } = result;
+
+			// 获取今天需要学习的卡片
+			const studyCards = await storage.getCardsToStudy(
+				deckId,
+				deck.settings.newCardsPerDay,
+				deck.settings.reviewCardsPerDay
+			);
+
+			if (studyCards.length === 0) {
+				new Notice('🎉 今天没有需要复习的卡片了！');
+				return;
+			}
+
+			// 设置学习状态
+			this.currentDeck = deck;
+			this.currentCards = studyCards;
+			this.currentCardIndex = 0;
+			this.studyStartTime = Date.now();
+
+			// 切换到学习视图
+			this.learningState = 'flashcard-study';
+			this.render();
+
+		} catch (error) {
+			console.error('开始学习失败:', error);
+			new Notice(`开始学习失败: ${error.message}`);
+		}
+	}
+
+	/**
+	 * 删除卡组
+	 */
+	private async deleteDeck(deckId: string, storage: FlashcardStorage): Promise<void> {
+		// TODO: Add confirmation modal
+		try {
+			await storage.deleteDeck(deckId);
+			new Notice('卡组已删除');
+			this.render(); // 刷新列表
+		} catch (error) {
+			console.error('删除卡组失败:', error);
+			new Notice(`删除失败: ${error.message}`);
+		}
+	}
+
+	/**
+	 * 切换卡组选择状态
+	 */
+	private toggleDeckSelection(deckId: string): void {
+		if (this.selectedDeckIds.has(deckId)) {
+			this.selectedDeckIds.delete(deckId);
+		} else {
+			this.selectedDeckIds.add(deckId);
+		}
+		this.render();
+	}
+
+	/**
+	 * 渲染多选操作栏
+	 */
+	private renderMultiSelectActions(container: HTMLElement, storage: FlashcardStorage): void {
+		const actionsBar = container.createDiv({ cls: 'multi-select-actions' });
+
+		actionsBar.createSpan({ text: `已选中 ${this.selectedDeckIds.size} 个卡组` });
+
+		const mergeBtn = actionsBar.createEl('button', {
+			text: '🔗 合并选中的卡组',
+			cls: 'action-btn primary'
+		});
+		mergeBtn.addEventListener('click', () => {
+			this.showMergeDecksModal(storage);
+		});
+
+		const cancelBtn = actionsBar.createEl('button', {
+			text: '✖ 取消选择',
+			cls: 'action-btn'
+		});
+		cancelBtn.addEventListener('click', () => {
+			this.selectedDeckIds.clear();
+			this.render();
+		});
+	}
+
+	/**
+	 * 显示合并卡组对话框
+	 */
+	private async showMergeDecksModal(storage: FlashcardStorage): Promise<void> {
+		if (this.selectedDeckIds.size < 2) {
+			new Notice('请至少选择2个卡组进行合并');
+			return;
+		}
+
+		try {
+			const decks = await storage.loadAllDecks();
+			const selectedDecks = decks.filter(d => this.selectedDeckIds.has(d.id));
+
+			new MergeDecksModal(
+				this.app,
+				selectedDecks,
+				async (newName) => {
+					await this.mergeDecks(Array.from(this.selectedDeckIds), newName, storage);
+				}
+			).open();
+		} catch (error) {
+			console.error('加载卡组失败:', error);
+			new Notice('加载卡组失败');
+		}
+	}
+
+	/**
+	 * 合并卡组
+	 */
+	private async mergeDecks(deckIds: string[], newName: string, storage: FlashcardStorage): Promise<void> {
+		try {
+			await storage.mergeDecks(deckIds, newName);
+			this.selectedDeckIds.clear();
+			new Notice('合并成功');
+			this.render();
+		} catch (error) {
+			console.error('合并卡组失败:', error);
+			new Notice(`合并失败: ${error.message}`);
+		}
+	}
+
+	/**
+	 * 打开创建卡组对话框
+	 */
+	private openCreateDeckModal(): void {
+		const modal = new CreateDeckModal(
+			this.app,
+			async (deckName: string, sourceNote: string, cardCount: number) => {
+				try {
+					// 重置取消标志
+					this.isCancelled = false;
+
+					// 创建进度卡片
+					const contentArea = this.containerEl.querySelector('.view-content-area');
+					if (!contentArea) return;
+
+					this.progressCard = new ProgressCard(contentArea as HTMLElement, {
+						title: '闪卡生成中',
+						onCancel: () => {
+							this.isCancelled = true;
+							this.progressCard?.destroy();
+							this.progressCard = null;
+							new Notice('已取消生成');
+						},
+						onBackground: () => {
+							this.progressCard?.hide();
+							new Notice('闪卡正在后台生成，完成后会通知您');
+						}
+					});
+					this.progressCard.show();
+					this.progressCard.updateProgress(0, '准备中...');
+
+					const { FlashcardGenerator } = await import('../flashcard/FlashcardGenerator');
+					const generator = new FlashcardGenerator(this.app, this.plugin);
+
+					const result = await generator.generateFromNote(
+						{
+							sourceNote: sourceNote,
+							deckName: deckName,
+							count: cardCount
+						},
+						(percent, status) => {
+							if (this.isCancelled) {
+								throw new Error('User cancelled');
+							}
+							this.progressCard?.updateProgress(percent, status);
+						}
+					);
+
+					// 完成，销毁进度卡片
+					this.progressCard?.destroy();
+					this.progressCard = null;
+
+					const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+
+					// 显示确认对话框
+					const confirmModal = new ConfirmFlashcardsModal(
+						this.app,
+						result.cards,
+						async (selectedCards: Flashcard[]) => {
+							if (selectedCards.length > 0) {
+								await storage.saveDeck(result.deck, selectedCards);
+								new Notice(`✅ 成功创建卡组，包含 ${selectedCards.length} 张卡片`);
+								this.render(); // 刷新列表
+							}
+						}
+					);
+					confirmModal.open();
+
+				} catch (error) {
+					// 清理进度卡片
+					this.progressCard?.destroy();
+					this.progressCard = null;
+
+					if (error.message !== 'User cancelled') {
+						console.error('生成闪卡失败:', error);
+						new Notice(`生成失败: ${error.message}`);
+					}
+				}
+			}
+		);
+		modal.open();
+	}
+
+	/**
+	 * 渲染闪卡学习页 - 新版3D卡片交互
+	 */
+	private renderFlashcardStudy(container: HTMLElement): void {
+		container.empty();
+
+		if (!this.currentDeck || this.currentCards.length === 0) {
+			container.createEl('p', { text: '没有可学习的卡片', cls: 'empty-state' });
+			return;
+		}
+
+		const currentCard = this.currentCards[this.currentCardIndex];
+
+		// 添加返回按钮的头部
+		const header = container.createDiv({ cls: 'page-header-with-back' });
+		const backBtn = header.createDiv({ cls: 'back-btn' });
+		setIcon(backBtn, 'arrow-left');
+		backBtn.addEventListener('click', () => {
+			this.learningState = 'flashcard-deck-list';
+			this.render();
+		});
+
+		const titleSection = header.createDiv();
+		titleSection.createEl('h2', { text: this.currentDeck.name, cls: 'page-title' });
+
+		// 进度信息
+		const progressInfo = container.createDiv({ cls: 'study-progress' });
+		progressInfo.createEl('p', {
+			text: `卡片 ${this.currentCardIndex + 1} / ${this.currentCards.length}`
+		});
+
+		// 创建3D卡片容器
+		const studyContainer = container.createDiv({ cls: 'flashcard-study-container' });
+		const card3d = this.createCardElement(currentCard);
+		studyContainer.appendChild(card3d);
+
+		// 设置手势操作
+		this.setupCardGestures(card3d, currentCard.id);
+
+		// 评分按钮（固定在底部）
+		this.renderRatingButtons(container, currentCard.id);
+	}
+
+	/**
+	 * 创建3D卡片元素
+	 */
+	private createCardElement(card: Flashcard): HTMLElement {
+		const card3d = document.createElement('div');
+		card3d.addClass('flashcard-3d');
+		card3d.addClass('enter'); // 添加进入动画
+
+		// 卡片正面 - 问题
+		const cardFront = card3d.createDiv({ cls: 'card-face card-front' });
+		const questionContent = cardFront.createDiv({ cls: 'card-question-content' });
+		questionContent.createEl('h3', { text: '💭 回忆答案' });
+		questionContent.createEl('p', { text: card.question });
+
+		// 卡片背面 - 答案
+		const cardBack = card3d.createDiv({ cls: 'card-face card-back' });
+		const answerContent = cardBack.createDiv({ cls: 'card-answer-content' });
+		answerContent.createEl('h3', { text: '✓ 答案' });
+		answerContent.createEl('p', { text: card.answer });
+
+		// 原文链接按钮（如果有原文信息）
+		if (card.sourceNote && card.sourceSection) {
+			const sourceBtn = answerContent.createEl('button', {
+				cls: 'source-link-btn',
+				text: '🔗 查看原文'
+			});
+			sourceBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				this.showSourcePopover(card.sourceNote, card.sourceSection);
+			});
+		}
+
+		// 点击卡片翻转
+		card3d.addEventListener('click', (e) => {
+			// 如果点击的是按钮，不翻转
+			if ((e.target as HTMLElement).tagName === 'BUTTON') {
+				return;
+			}
+			this.toggleCardFlip(card3d);
+		});
+
+		return card3d;
+	}
+
+	/**
+	 * 翻转卡片
+	 */
+	private toggleCardFlip(cardEl: HTMLElement): void {
+		if (cardEl.hasClass('flipped')) {
+			cardEl.removeClass('flipped');
+		} else {
+			cardEl.addClass('flipped');
+		}
+	}
+
+	/**
+	 * 渲染评分按钮
+	 */
+	private renderRatingButtons(container: HTMLElement, cardId: string): void {
+		const ratingButtons = container.createDiv({ cls: 'rating-buttons' });
+
+		const ratings = [
+			{ label: '忘记', value: 0, desc: '完全不记得' },
+			{ label: '困难', value: 1, desc: '勉强想起来' },
+			{ label: '熟悉', value: 2, desc: '回忆正确' },
+			{ label: '简单', value: 3, desc: '轻松回答' }
+		];
+
+		ratings.forEach(rating => {
+			const btn = ratingButtons.createEl('button', {
+				text: `${rating.label}\n${rating.desc}`,
+				cls: 'rating-btn'
+			});
+
+			btn.addEventListener('click', async () => {
+				// 禁用所有按钮
+				ratingButtons.addClass('disabled');
+				const allBtns = ratingButtons.querySelectorAll('.rating-btn');
+				allBtns.forEach(b => (b as HTMLButtonElement).disabled = true);
+
+				// 触发退出动画
+				await this.animateCardExit(rating.value as 0 | 1 | 2 | 3, cardId);
+			});
+		});
+	}
+
+	/**
+	 * 设置卡片手势操作
+	 */
+	private setupCardGestures(cardEl: HTMLElement, cardId: string): void {
+		let startX = 0;
+		let currentX = 0;
+		let isDragging = false;
+		let dragStartTime = 0;
+
+		const handleDragStart = (e: MouseEvent | TouchEvent) => {
+			// 如果已翻转或点击的是按钮，不处理拖动
+			if (cardEl.hasClass('flipped') || (e.target as HTMLElement).tagName === 'BUTTON') {
+				return;
+			}
+
+			isDragging = true;
+			dragStartTime = Date.now();
+			startX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+			currentX = startX;
+
+			cardEl.addClass('dragging');
+		};
+
+		const handleDragMove = (e: MouseEvent | TouchEvent) => {
+			if (!isDragging) return;
+
+			e.preventDefault();
+			currentX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+			const deltaX = currentX - startX;
+
+			// 应用位移
+			cardEl.style.transform = `translateX(${deltaX}px) rotate(${deltaX * 0.1}deg)`;
+
+			// 根据拖动方向显示颜色提示
+			if (deltaX < -20) {
+				cardEl.removeClass('drag-right');
+				cardEl.addClass('drag-left');
+				cardEl.style.setProperty('--drag-opacity', String(Math.min(Math.abs(deltaX) / 100, 1)));
+			} else if (deltaX > 20) {
+				cardEl.removeClass('drag-left');
+				cardEl.addClass('drag-right');
+				cardEl.style.setProperty('--drag-opacity', String(Math.min(Math.abs(deltaX) / 100, 1)));
+			} else {
+				cardEl.removeClass('drag-left');
+				cardEl.removeClass('drag-right');
+			}
+		};
+
+		const handleDragEnd = async () => {
+			if (!isDragging) return;
+			isDragging = false;
+
+			const deltaX = currentX - startX;
+			const threshold = 100; // 滑动阈值
+
+			cardEl.removeClass('dragging');
+			cardEl.removeClass('drag-left');
+			cardEl.removeClass('drag-right');
+
+			if (Math.abs(deltaX) >= threshold) {
+				// 超过阈值，触发评分
+				const rating = deltaX < 0 ? 0 : 3; // 左滑=忘记(0)，右滑=简单(3)
+
+				// 禁用按钮
+				const ratingButtons = this.containerEl.querySelector('.rating-buttons');
+				if (ratingButtons) {
+					ratingButtons.addClass('disabled');
+					const allBtns = ratingButtons.querySelectorAll('.rating-btn');
+					allBtns.forEach(b => (b as HTMLButtonElement).disabled = true);
+				}
+
+				// 继续滑出动画
+				await this.animateCardExit(rating as 0 | 3, cardId);
+			} else {
+				// 未超过阈值，回弹
+				cardEl.style.transform = '';
+				cardEl.style.setProperty('--drag-opacity', '0');
+			}
+		};
+
+		// 绑定事件
+		cardEl.addEventListener('mousedown', handleDragStart as any);
+		cardEl.addEventListener('touchstart', handleDragStart as any);
+		document.addEventListener('mousemove', handleDragMove as any);
+		document.addEventListener('touchmove', handleDragMove as any, { passive: false });
+		document.addEventListener('mouseup', handleDragEnd);
+		document.addEventListener('touchend', handleDragEnd);
+	}
+
+	/**
+	 * 卡片退出动画
+	 */
+	private async animateCardExit(rating: 0 | 1 | 2 | 3, cardId: string): Promise<void> {
+		const studyContainer = this.containerEl.querySelector('.flashcard-study-container');
+		if (!studyContainer) return;
+
+		const card3d = studyContainer.querySelector('.flashcard-3d') as HTMLElement;
+		if (!card3d) return;
+
+		// 清除进入动画
+		card3d.removeClass('enter');
+		card3d.removeClass('dragging');
+
+		// 根据评分选择退出方向
+		const direction = (rating === 0 || rating === 1) ? 'left' : 'right';
+		card3d.addClass(`exit-${direction}`);
+
+		// 等待动画完成（400ms）
+		await new Promise(resolve => setTimeout(resolve, 400));
+
+		// 更新学习数据
+		await this.rateCard(cardId, rating);
+
+		// 检查是否最后一张
+		const isLastCard = this.currentCardIndex === this.currentCards.length - 1;
+
+		if (isLastCard) {
+			new Notice('🎉 今天的学习任务完成了！');
+			this.learningState = 'flashcard-deck-list';
+			this.render();
+		} else {
+			// 移动到下一张
+			this.currentCardIndex++;
+			this.updateCardDisplay();
+		}
+	}
+
+	/**
+	 * 更新卡片显示（不重新渲染整个页面）
+	 */
+	private updateCardDisplay(): void {
+		const studyContainer = this.containerEl.querySelector('.flashcard-study-container');
+		const progressInfo = this.containerEl.querySelector('.study-progress p');
+		const ratingButtons = this.containerEl.querySelector('.rating-buttons');
+
+		if (!studyContainer || !progressInfo || !this.currentDeck) return;
+
+		// 移除旧卡片
+		studyContainer.empty();
+
+		// 创建新卡片
+		const currentCard = this.currentCards[this.currentCardIndex];
+		const newCard = this.createCardElement(currentCard);
+		studyContainer.appendChild(newCard);
+
+		// 设置手势
+		this.setupCardGestures(newCard, currentCard.id);
+
+		// 更新进度
+		progressInfo.textContent = `卡片 ${this.currentCardIndex + 1} / ${this.currentCards.length}`;
+
+		// 重新启用按钮
+		if (ratingButtons) {
+			ratingButtons.removeClass('disabled');
+			const allBtns = ratingButtons.querySelectorAll('.rating-btn');
+			allBtns.forEach(b => (b as HTMLButtonElement).disabled = false);
+		}
+	}
+
+	/**
+	 * 显示原文悬浮窗
+	 */
+	private async showSourcePopover(sourceNote: string, sourceSection: string): Promise<void> {
+		try {
+			// 查找原文件
+			const file = this.app.vault.getAbstractFileByPath(sourceNote);
+			if (!(file instanceof TFile)) {
+				new Notice('无法找到原文件');
+				return;
+			}
+
+			// 读取文件内容
+			const content = await this.app.vault.read(file);
+
+			// 提取相关段落（简单实现：搜索包含sourceSection的段落）
+			const lines = content.split('\n');
+			let sectionContent = '';
+			let inSection = false;
+			let sectionStart = -1;
+
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+
+				// 检查是否是目标章节标题
+				if (line.includes(sourceSection) || line.trim() === sourceSection.trim()) {
+					inSection = true;
+					sectionStart = i;
+					sectionContent += line + '\n';
+					continue;
+				}
+
+				if (inSection) {
+					// 遇到新的标题，停止
+					if (line.startsWith('#') && i > sectionStart) {
+						break;
+					}
+					sectionContent += line + '\n';
+
+					// 最多读取20行
+					if (i - sectionStart > 20) {
+						sectionContent += '\n...(内容过长，已截断)';
+						break;
+					}
+				}
+			}
+
+			if (!sectionContent.trim()) {
+				sectionContent = '未找到匹配的章节内容';
+			}
+
+			// 显示悬浮窗
+			new SourcePopoverModal(this.app, file.basename, sourceSection, sectionContent, () => {
+				// 跳转到原文
+				this.app.workspace.getLeaf().openFile(file);
+			}).open();
+
+		} catch (error) {
+			console.error('加载原文失败:', error);
+			new Notice('加载原文失败');
+		}
+	}
+
+	/**
+	 * 给卡片评分并更新学习状态
+	 */
+	private async rateCard(cardId: string, rating: 0 | 1 | 2 | 3): Promise<void> {
+		if (!this.currentDeck) return;
+
+		try {
+			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+			const timeTaken = Date.now() - this.studyStartTime;
+
+			await storage.updateCardLearningState(this.currentDeck.id, cardId, rating, timeTaken);
+
+			// 重置计时
+			this.studyStartTime = Date.now();
+
+		} catch (error) {
+			console.error('更新卡片状态失败:', error);
+			new Notice(`更新失败: ${error.message}`);
+		}
+	}
+
+	/**
+	 * 渲染创建闪卡页（占位）
+	 */
+	private renderFlashcardCreate(container: HTMLElement): void {
+		container.empty();
+		container.createEl('p', { text: '创建闪卡功能（通过对话框实现）', cls: 'empty-state' });
+	}
+
+	/**
+	 * 获取闪卡统计信息
+	 */
+	private async getFlashcardStatistics(): Promise<{ totalCards: number; totalDecks: number; masteredCards: number }> {
+		try {
+			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+			const decks = await storage.loadAllDecks();
+
+			let totalCards = 0;
+			let masteredCards = 0;
+
+			for (const deck of decks) {
+				totalCards += deck.stats.total;
+				masteredCards += deck.stats.mastered;
+			}
+
+			return {
+				totalCards,
+				totalDecks: decks.length,
+				masteredCards
+			};
+		} catch (error) {
+			console.error('获取闪卡统计失败:', error);
+			return { totalCards: 0, totalDecks: 0, masteredCards: 0 };
+		}
+	}
+
 	private renderProfilePage(container: HTMLElement): void {
 		container.empty();
 		container.addClass('profile-page');
@@ -3138,4 +3953,69 @@ class FilePickerModal extends Modal {
         contentEl.empty();
         this.onChoose(this.selected);
     }
+}
+
+/**
+ * 原文悬浮窗对话框
+ */
+class SourcePopoverModal extends Modal {
+	private fileName: string;
+	private sectionTitle: string;
+	private sectionContent: string;
+	private onJumpToSource: () => void;
+
+	constructor(
+		app: App,
+		fileName: string,
+		sectionTitle: string,
+		sectionContent: string,
+		onJumpToSource: () => void
+	) {
+		super(app);
+		this.fileName = fileName;
+		this.sectionTitle = sectionTitle;
+		this.sectionContent = sectionContent;
+		this.onJumpToSource = onJumpToSource;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		this.modalEl.addClass('source-popover-modal');
+
+		// 头部
+		const header = contentEl.createDiv({ cls: 'source-popover-header' });
+		header.createDiv({ cls: 'source-icon', text: '📄' });
+		header.createEl('h3', { text: this.fileName });
+
+		// 内容区域
+		const content = contentEl.createDiv({ cls: 'source-popover-content' });
+
+		// 章节标题
+		const section = content.createDiv({ cls: 'source-popover-section' });
+		section.createEl('h4', { text: '相关段落' });
+
+		const sectionText = section.createEl('p');
+		sectionText.setText(this.sectionContent);
+
+		// 按钮区域
+		const actions = contentEl.createDiv({ cls: 'source-popover-actions' });
+
+		const closeBtn = actions.createEl('button', { text: '关闭' });
+		closeBtn.addEventListener('click', () => this.close());
+
+		const jumpBtn = actions.createEl('button', {
+			text: '跳转到原文',
+			cls: 'mod-cta'
+		});
+		jumpBtn.addEventListener('click', () => {
+			this.onJumpToSource();
+			this.close();
+		});
+	}
+
+	onClose(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
 }

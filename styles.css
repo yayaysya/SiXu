@@ -2233,3 +2233,407 @@ button.mod-cta:hover {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* ===== 闪卡学习页面3D交互样式 ===== */
+
+/* 学习进度 */
+.study-progress {
+	padding: 16px 20px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+	margin-bottom: 16px;
+	text-align: center;
+}
+
+.study-progress p {
+	margin: 0;
+	font-size: 0.95em;
+	color: var(--text-muted);
+	font-weight: 500;
+}
+
+/* ===== 3D卡片容器系统 ===== */
+
+/* 卡片学习容器 - 提供3D透视效果 */
+.flashcard-study-container {
+	perspective: 1000px;
+	position: relative;
+	width: 100%;
+	min-height: 400px;
+	margin-bottom: 20px;
+}
+
+/* 3D卡片包装器 */
+.flashcard-3d {
+	position: relative;
+	width: 100%;
+	min-height: 400px;
+	transform-style: preserve-3d;
+	transition: transform 0.5s ease-in-out;
+	cursor: pointer;
+}
+
+/* 翻转状态 */
+.flashcard-3d.flipped {
+	transform: rotateY(180deg);
+}
+
+/* 卡片正面和背面共同样式 */
+.card-face {
+	position: absolute;
+	width: 100%;
+	min-height: 400px;
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+	background: var(--background-secondary);
+	border-radius: 12px;
+	padding: 32px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+}
+
+/* 卡片正面 - 问题 */
+.card-front {
+	z-index: 2;
+	transform: rotateY(0deg);
+}
+
+/* 卡片背面 - 答案 */
+.card-back {
+	transform: rotateY(180deg);
+	background: var(--background-modifier-hover);
+}
+
+/* 问题内容样式 */
+.card-question-content {
+	text-align: center;
+}
+
+.card-question-content h3 {
+	margin: 0 0 20px 0;
+	font-size: 1.3em;
+	font-weight: 600;
+	color: var(--interactive-accent);
+}
+
+.card-question-content p {
+	margin: 0;
+	font-size: 1.15em;
+	line-height: 1.7;
+	color: var(--text-normal);
+}
+
+/* 答案内容样式 */
+.card-answer-content {
+	text-align: left;
+	position: relative;
+}
+
+.card-answer-content h3 {
+	margin: 0 0 16px 0;
+	font-size: 1.2em;
+	font-weight: 600;
+	color: var(--interactive-accent);
+	border-bottom: 2px solid var(--interactive-accent);
+	padding-bottom: 8px;
+}
+
+.card-answer-content p {
+	margin: 0 0 20px 0;
+	font-size: 1.05em;
+	line-height: 1.6;
+	color: var(--text-normal);
+}
+
+/* 原文链接按钮 */
+.source-link-btn {
+	position: absolute;
+	bottom: 16px;
+	right: 16px;
+	padding: 8px 12px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	transition: all 0.2s;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.source-link-btn:hover {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+	transform: translateY(-1px);
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== 卡片动画系统 ===== */
+
+/* 手势拖动时的视觉反馈 */
+.flashcard-3d.dragging {
+	transition: none;
+	cursor: grabbing;
+}
+
+/* 拖动方向颜色叠加 */
+.flashcard-3d.drag-left::before,
+.flashcard-3d.drag-right::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	border-radius: 12px;
+	pointer-events: none;
+	z-index: 10;
+	opacity: 0;
+	transition: opacity 0.2s;
+}
+
+.flashcard-3d.drag-left::before {
+	background: linear-gradient(90deg, rgba(229, 62, 62, 0.3) 0%, transparent 50%);
+	opacity: var(--drag-opacity, 0);
+}
+
+.flashcard-3d.drag-right::before {
+	background: linear-gradient(270deg, rgba(76, 175, 80, 0.3) 0%, transparent 50%);
+	opacity: var(--drag-opacity, 0);
+}
+
+/* 卡片退出动画 - 左滑 */
+@keyframes slideOutLeft {
+	0% {
+		transform: translateX(0) rotate(0deg);
+		opacity: 1;
+	}
+	100% {
+		transform: translateX(-120%) rotate(-15deg);
+		opacity: 0;
+	}
+}
+
+/* 卡片退出动画 - 右滑 */
+@keyframes slideOutRight {
+	0% {
+		transform: translateX(0) rotate(0deg);
+		opacity: 1;
+	}
+	100% {
+		transform: translateX(120%) rotate(15deg);
+		opacity: 0;
+	}
+}
+
+/* 卡片进入动画 - 从中心 */
+@keyframes slideInCenter {
+	0% {
+		transform: scale(0.8);
+		opacity: 0;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+/* 应用退出动画 */
+.flashcard-3d.exit-left {
+	animation: slideOutLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.flashcard-3d.exit-right {
+	animation: slideOutRight 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* 应用进入动画 */
+.flashcard-3d.enter {
+	animation: slideInCenter 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ===== 评分按钮 - 固定底部布局 ===== */
+
+/* 评分按钮容器 */
+.rating-buttons {
+	position: fixed;
+	bottom: 80px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 12px;
+	max-width: 600px;
+	width: calc(100% - 40px);
+	padding: 16px;
+	background: var(--background-primary);
+	border-radius: 12px;
+	box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
+	z-index: 100;
+}
+
+@media (max-width: 768px) {
+	.rating-buttons {
+		grid-template-columns: repeat(2, 1fr);
+		bottom: 70px;
+	}
+}
+
+.rating-buttons.disabled {
+	pointer-events: none;
+	opacity: 0.6;
+}
+
+.rating-btn {
+	padding: 16px 12px;
+	border: 2px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	border-radius: 8px;
+	cursor: pointer;
+	font-size: 0.9em;
+	text-align: center;
+	transition: all 0.2s;
+	white-space: pre-line;
+	line-height: 1.4;
+	font-weight: 500;
+}
+
+.rating-btn:hover:not(:disabled) {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+	transform: translateY(-2px);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.rating-btn:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.rating-btn:nth-child(1) {
+	color: var(--text-error);
+}
+
+.rating-btn:nth-child(1):hover:not(:disabled) {
+	border-color: var(--text-error);
+	background: rgba(var(--text-error-rgb, 229, 62, 62), 0.1);
+}
+
+.rating-btn:nth-child(2) {
+	color: var(--color-orange);
+}
+
+.rating-btn:nth-child(2):hover:not(:disabled) {
+	border-color: var(--color-orange);
+	background: rgba(255, 152, 0, 0.1);
+}
+
+.rating-btn:nth-child(3) {
+	color: var(--interactive-accent);
+}
+
+.rating-btn:nth-child(3):hover:not(:disabled) {
+	border-color: var(--interactive-accent);
+	background: rgba(var(--interactive-accent-rgb, 123, 108, 214), 0.1);
+}
+
+.rating-btn:nth-child(4) {
+	color: var(--color-green);
+}
+
+.rating-btn:nth-child(4):hover:not(:disabled) {
+	border-color: var(--color-green);
+	background: rgba(var(--color-green-rgb, 76, 175, 80), 0.1);
+}
+
+/* ===== 原文悬浮窗样式 ===== */
+
+.source-popover-modal .modal-content {
+	padding: 24px;
+	max-width: 700px;
+	max-height: 80vh;
+	overflow-y: auto;
+}
+
+.source-popover-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 20px;
+	padding-bottom: 12px;
+	border-bottom: 2px solid var(--background-modifier-border);
+}
+
+.source-popover-header .source-icon {
+	font-size: 1.5em;
+}
+
+.source-popover-header h3 {
+	margin: 0;
+	font-size: 1.2em;
+	font-weight: 600;
+	color: var(--text-normal);
+	flex: 1;
+}
+
+.source-popover-content {
+	margin-bottom: 20px;
+}
+
+.source-popover-section {
+	padding: 16px;
+	background: var(--background-modifier-hover);
+	border-radius: 8px;
+	border-left: 4px solid var(--interactive-accent);
+	margin-bottom: 12px;
+}
+
+.source-popover-section h4 {
+	margin: 0 0 8px 0;
+	font-size: 1em;
+	font-weight: 600;
+	color: var(--interactive-accent);
+}
+
+.source-popover-section p {
+	margin: 0;
+	font-size: 0.95em;
+	line-height: 1.6;
+	color: var(--text-normal);
+}
+
+.source-popover-actions {
+	display: flex;
+	gap: 12px;
+	justify-content: flex-end;
+}
+
+.source-popover-actions button {
+	padding: 10px 20px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	cursor: pointer;
+	font-size: 0.9em;
+	transition: all 0.2s;
+}
+
+.source-popover-actions button:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+}
+
+.source-popover-actions button.mod-cta {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.source-popover-actions button.mod-cta:hover {
+	background: var(--interactive-accent-hover);
+}
