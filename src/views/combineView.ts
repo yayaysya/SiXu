@@ -89,6 +89,18 @@ export class CombineNotesView extends ItemView {
 	private studyStartTime: number = 0;
 	private deckSortMode: 'time' | 'name' | 'cards' = 'time';
 
+	// 手势监听器管理（用于清理，防止累积）
+	private gestureListeners: {
+		mousemove?: (e: Event) => void;
+		touchmove?: (e: Event) => void;
+		mouseup?: (e: Event) => void;
+		touchend?: (e: Event) => void;
+	} = {};
+
+	// 卡片翻转防抖时间戳（防止快速连续翻转）
+	private lastFlipTime: number = 0;
+	private flipDebounceMs: number = 300; // 300ms内只能翻转一次
+
 	// 进度卡片相关状态
 	private progressCard: ProgressCard | null = null;
 	private isCancelled: boolean = false;
@@ -152,6 +164,9 @@ export class CombineNotesView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
+		// 清理手势监听器
+		this.cleanupGestureListeners();
+
 		// 清理事件监听器
 		if (this.fileChangeEventRef) {
 			this.plugin.app.workspace.offref(this.fileChangeEventRef);
@@ -3373,7 +3388,7 @@ export class CombineNotesView extends ItemView {
 		titleRow.createEl('h2', { text: this.currentDeck.name, cls: 'page-title' });
 
 		// 第二行：副标题
-		header.createEl('p', { text: '通过间隔重复加深记忆', cls: 'page-subtitle' });
+		//header.createEl('p', { text: '通过间隔重复加深记忆', cls: 'page-subtitle' });
 
 		// 创建3D卡片容器
 		const studyContainer = container.createDiv({ cls: 'flashcard-study-container' });
@@ -3516,9 +3531,14 @@ export class CombineNotesView extends ItemView {
 
 		ratings.forEach(rating => {
 			const btn = ratingButtons.createEl('button', {
-				text: `${rating.label}\n${rating.desc}`,
 				cls: 'rating-btn'
 			});
+
+			// 设置完整文字（PC端显示）
+			btn.textContent = `${rating.label}\n${rating.desc}`;
+
+			// 添加短文本属性（移动端使用）
+			btn.setAttribute('data-short-label', rating.label);
 
 			btn.addEventListener('click', async () => {
 				// 禁用所有按钮
@@ -3533,13 +3553,36 @@ export class CombineNotesView extends ItemView {
 	}
 
 	/**
+	 * 清理手势监听器
+	 */
+	private cleanupGestureListeners(): void {
+		if (this.gestureListeners.mousemove) {
+			document.removeEventListener('mousemove', this.gestureListeners.mousemove);
+		}
+		if (this.gestureListeners.touchmove) {
+			document.removeEventListener('touchmove', this.gestureListeners.touchmove as any);
+		}
+		if (this.gestureListeners.mouseup) {
+			document.removeEventListener('mouseup', this.gestureListeners.mouseup);
+		}
+		if (this.gestureListeners.touchend) {
+			document.removeEventListener('touchend', this.gestureListeners.touchend);
+		}
+		this.gestureListeners = {};
+	}
+
+	/**
 	 * 设置卡片手势操作
 	 */
 	private setupCardGestures(cardEl: HTMLElement, cardId: string): void {
+		// 先清理旧监听器，防止累积
+		this.cleanupGestureListeners();
+
 		let startX = 0;
 		let currentX = 0;
 		let isDragging = false;
 		let dragStartTime = 0;
+		let hasFlipped = false; // 防止重复翻转
 
 		const handleDragStart = (e: MouseEvent | TouchEvent) => {
 			// 只阻止按钮点击，允许翻转后的卡片继续响应
@@ -3554,6 +3597,7 @@ export class CombineNotesView extends ItemView {
 			});
 
 			isDragging = true;
+			hasFlipped = false; // 重置翻转标志
 			dragStartTime = Date.now();
 			startX = 'touches' in e ? e.touches[0].clientX : e.clientX;
 			currentX = startX;
@@ -3597,19 +3641,40 @@ export class CombineNotesView extends ItemView {
 			}
 		};
 
-		const handleDragEnd = async () => {
+		const handleDragEnd = async (e?: Event) => {
 			console.log('[FlashCard] 拖动/点击结束', {
 				isDragging,
+				hasFlipped,
+				eventType: e ? e.type : 'unknown',
 				startX,
 				currentX,
 				deltaX: currentX - startX,
-				duration: Date.now() - dragStartTime
+				duration: Date.now() - dragStartTime,
+				timeSinceLastFlip: Date.now() - this.lastFlipTime
 			});
 
 			if (!isDragging) {
 				console.log('[FlashCard] isDragging为false，直接返回');
 				return;
 			}
+
+			// 防止重复翻转（局部标志）
+			if (hasFlipped) {
+				console.log('[FlashCard] 已经翻转过了（局部标志），忽略重复触发');
+				return;
+			}
+
+			// 防止快速连续翻转（全局时间戳检查）
+			const now = Date.now();
+			if (now - this.lastFlipTime < this.flipDebounceMs) {
+				console.log('[FlashCard] 翻转防抖期内，忽略', {
+					timeSinceLastFlip: now - this.lastFlipTime,
+					debounceMs: this.flipDebounceMs
+				});
+				isDragging = false;
+				return;
+			}
+
 			isDragging = false;
 
 			const deltaX = currentX - startX;
@@ -3623,27 +3688,40 @@ export class CombineNotesView extends ItemView {
 			// 判断是点击还是拖拽
 			if (Math.abs(deltaX) < 5 && dragDuration < 200) {
 				// 这是点击操作，翻转卡片
+				hasFlipped = true; // 标记已翻转，防止重复
+
+				// 阻止触摸事件的默认行为（防止移动端生成合成点击事件）
+				if (e && e.type === 'touchend') {
+					e.preventDefault();
+					console.log('[FlashCard] 已阻止touchend的默认行为');
+				}
+
 				console.log('[FlashCard] 判定为点击操作，执行翻转', {
 					deltaX,
 					duration: dragDuration,
-					wasFlipped: cardEl.hasClass('flipped')
+					wasFlipped: cardEl.hasClass('flipped'),
+					eventType: e ? e.type : 'unknown'
 				});
 
 				// 完全移除内联transform，让CSS类生效
 				cardEl.style.removeProperty('transform');
 				cardEl.style.setProperty('--drag-opacity', '0');
-				
+
 				console.log('[FlashCard] 移除内联transform后，准备翻转', {
 					inlineTransform: cardEl.style.transform,
 					computedTransform: window.getComputedStyle(cardEl).transform
 				});
-				
+
 				this.toggleCardFlip(cardEl);
+
+				// 更新全局防抖时间戳
+				this.lastFlipTime = Date.now();
 
 				console.log('[FlashCard] 翻转完成', {
 					nowFlipped: cardEl.hasClass('flipped'),
 					inlineTransform: cardEl.style.transform,
-					computedTransform: window.getComputedStyle(cardEl).transform
+					computedTransform: window.getComputedStyle(cardEl).transform,
+					newLastFlipTime: this.lastFlipTime
 				});
 				return;
 			}
@@ -3678,10 +3756,18 @@ export class CombineNotesView extends ItemView {
 		// 绑定事件
 		cardEl.addEventListener('mousedown', handleDragStart as any);
 		cardEl.addEventListener('touchstart', handleDragStart as any);
-		document.addEventListener('mousemove', handleDragMove as any);
-		document.addEventListener('touchmove', handleDragMove as any, { passive: false });
-		document.addEventListener('mouseup', handleDragEnd);
-		document.addEventListener('touchend', handleDragEnd);
+
+		// 保存监听器引用以便后续清理
+		this.gestureListeners.mousemove = handleDragMove as any;
+		this.gestureListeners.touchmove = handleDragMove as any;
+		this.gestureListeners.mouseup = handleDragEnd as any;
+		this.gestureListeners.touchend = handleDragEnd as any;
+
+		// 使用保存的引用绑定到document
+		document.addEventListener('mousemove', this.gestureListeners.mousemove!);
+		document.addEventListener('touchmove', this.gestureListeners.touchmove!, { passive: false });
+		document.addEventListener('mouseup', this.gestureListeners.mouseup!);
+		document.addEventListener('touchend', this.gestureListeners.touchend!);
 	}
 
 	/**

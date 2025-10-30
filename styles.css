@@ -2824,22 +2824,40 @@ button.mod-cta:hover {
 	box-sizing: border-box;
 }
 
-/* 超小屏幕：纵向堆叠布局（1列x4行） */
+/* 超小屏幕：横向一行布局（4列x1行） */
 @media (max-width: 400px) {
 	.rating-buttons {
-		grid-template-columns: 1fr;
+		grid-template-columns: repeat(4, 1fr);
 		bottom: calc(90px + env(safe-area-inset-bottom, 0px));
-		gap: 6px;
-		padding: 10px;
-		width: calc(100% - 20px);
+		gap: 4px;
+		padding: 8px;
+		width: calc(100% - 16px);
 		max-width: 100%;
 	}
-	
+
 	.rating-btn {
-		padding: 10px 12px;
-		font-size: 0.8em;
-		min-height: 48px;
-		line-height: 1.25;
+		padding: 10px 4px;
+		min-height: 40px;
+		line-height: 1.2;
+		position: relative;
+
+		/* 隐藏原始文本 */
+		text-indent: -9999px;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+
+	/* 使用伪元素显示短文本 */
+	.rating-btn::before {
+		content: attr(data-short-label);
+		font-size: 0.85em;
+		text-indent: 0;
+		display: block;
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 50%;
+		transform: translateY(-50%);
 	}
 }
 
