@@ -3055,26 +3055,30 @@ export class CombineNotesView extends ItemView {
 			// 应用排序
 			decks = this.sortDecks(decks);
 
+			// 清理已不存在的选择项，防止残留的多选状态导致操作栏遮挡点击
+			const deckIdSet = new Set(decks.map(d => d.id));
+			for (const id of Array.from(this.selectedDeckIds)) {
+				if (!deckIdSet.has(id)) {
+					this.selectedDeckIds.delete(id);
+				}
+			}
+
 			// 先添加"创建新卡组"卡片（放在最前面）
 			const createCard = deckContainer.createDiv({ cls: 'deck-card create-new-ios' });
 
-			// 卡片头部图标区域
-			const iconContainer = createCard.createDiv({ cls: 'create-card-icon-container' });
-			const iconBg = iconContainer.createDiv({ cls: 'create-card-icon-bg' });
-			const icon = iconBg.createDiv({ cls: 'create-card-icon' });
-			icon.setText('✨');
+			// 简化版本：只创建基本内容，不用复杂嵌套
+			createCard.createEl('h3', { text: '创建新卡组' });
+			createCard.createEl('p', { text: '从笔记生成学习卡片' });
 
-			// 卡片内容区域
-			const content = createCard.createDiv({ cls: 'create-card-content' });
-			content.createEl('h3', { text: '创建新卡组' });
-			content.createEl('p', { text: '从笔记生成学习卡片' });
-
-			createCard.addEventListener('click', () => {
+			createCard.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
 				this.openCreateDeckModal();
 			});
 
 			if (decks.length === 0) {
-				const empty = deckContainer.createDiv({ cls: 'empty-state' });
+				// 使用新的CSS类，避免与empty-state冲突导致卡死
+				const empty = deckContainer.createDiv({ cls: 'deck-empty-hint' });
 				empty.createEl('p', { text: '暂无闪卡组，请先创建一个卡组' });
 			} else {
 				// 渲染每个卡组（在创建新卡组卡片之后）
@@ -3219,6 +3223,8 @@ export class CombineNotesView extends ItemView {
 		// TODO: Add confirmation modal
 		try {
 			await storage.deleteDeck(deckId);
+			// 删除后同步清理选择状态，避免残留多选操作栏
+			this.selectedDeckIds.delete(deckId);
 			new Notice('卡组已删除');
 			this.render(); // 刷新列表
 		} catch (error) {

@@ -1152,6 +1152,16 @@ button.mod-cta:hover {
     color: var(--text-muted);
 }
 
+/* 闪卡空状态提示（修复卡死问题） */
+.deck-empty-hint {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 0.95em;
+    background: transparent;
+    border: none;
+}
+
 /* ===== 主页样式 ===== */
 .home-page {
     padding: 20px;
