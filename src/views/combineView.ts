@@ -3664,17 +3664,6 @@ export class CombineNotesView extends ItemView {
 				return;
 			}
 
-			// 防止快速连续翻转（全局时间戳检查）
-			const now = Date.now();
-			if (now - this.lastFlipTime < this.flipDebounceMs) {
-				console.log('[FlashCard] 翻转防抖期内，忽略', {
-					timeSinceLastFlip: now - this.lastFlipTime,
-					debounceMs: this.flipDebounceMs
-				});
-				isDragging = false;
-				return;
-			}
-
 			isDragging = false;
 
 			const deltaX = currentX - startX;
@@ -3686,7 +3675,7 @@ export class CombineNotesView extends ItemView {
 			cardEl.removeClass('drag-right');
 
 			// 判断是点击还是拖拽
-			if (Math.abs(deltaX) < 5 && dragDuration < 200) {
+			if (Math.abs(deltaX) < 5 && dragDuration < 300) {
 				// 这是点击操作，翻转卡片
 				hasFlipped = true; // 标记已翻转，防止重复
 
@@ -3702,6 +3691,16 @@ export class CombineNotesView extends ItemView {
 					wasFlipped: cardEl.hasClass('flipped'),
 					eventType: e ? e.type : 'unknown'
 				});
+
+				// 防止快速连续翻转（全局时间戳检查）
+				const now = Date.now();
+				if (now - this.lastFlipTime < this.flipDebounceMs) {
+					console.log('[FlashCard] 翻转防抖期内，忽略', {
+						timeSinceLastFlip: now - this.lastFlipTime,
+						debounceMs: this.flipDebounceMs
+					});
+					return;
+				}
 
 				// 完全移除内联transform，让CSS类生效
 				cardEl.style.removeProperty('transform');
