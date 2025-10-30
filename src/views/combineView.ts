@@ -2768,14 +2768,20 @@ export class CombineNotesView extends ItemView {
 		const page = container.createDiv({ cls: 'quiz-hub-page' });
 
 		// 头部
-		const header = page.createDiv({ cls: 'page-header-with-back' });
-		const backBtn = header.createEl('button', { cls: 'back-btn' });
+		const header = page.createDiv({ cls: 'learning-page-header' });
+
+		// 第一行：返回按钮 + 标题
+		const titleRow = header.createDiv({ cls: 'header-title-row' });
+		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
 			this.learningState = 'hub';
 			this.render();
 		});
-		header.createEl('h2', { text: 'Quiz 学习', cls: 'page-title' });
+		titleRow.createEl('h2', { text: 'Quiz 学习', cls: 'page-title' });
+
+		// 第二行：副标题
+		header.createEl('p', { text: '通过试题检验学习成果', cls: 'page-subtitle' });
 
 		const options = page.createDiv({ cls: 'learning-options' });
 
@@ -2824,16 +2830,20 @@ export class CombineNotesView extends ItemView {
 		const listPage = container.createDiv({ cls: 'quiz-list-page' });
 
 		// 页面头部
-		const header = listPage.createDiv({ cls: 'page-header-with-back' });
+		const header = listPage.createDiv({ cls: 'learning-page-header' });
 
-		const backBtn = header.createEl('button', { cls: 'back-btn' });
+		// 第一行：返回按钮 + 标题
+		const titleRow = header.createDiv({ cls: 'header-title-row' });
+		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
 			this.learningState = 'quiz-hub';
 			this.render();
 		});
+		titleRow.createEl('h2', { text: '试题列表', cls: 'page-title' });
 
-		header.createEl('h2', { text: '试题列表', cls: 'page-title' });
+		// 第二行：副标题
+		header.createEl('p', { text: '选择一套试题开始练习', cls: 'page-subtitle' });
 
 		// Quiz列表容器
 		const quizList = listPage.createDiv({ cls: 'quiz-cards-container' });
@@ -2953,16 +2963,20 @@ export class CombineNotesView extends ItemView {
 		container.empty();
 
 		// 添加返回按钮的头部
-		const header = container.createDiv({ cls: 'page-header-with-back' });
-		const backBtn = header.createDiv({ cls: 'back-btn' });
+		const header = container.createDiv({ cls: 'learning-page-header' });
+
+		// 第一行：返回按钮 + 标题
+		const titleRow = header.createDiv({ cls: 'header-title-row' });
+		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
 			this.learningState = 'hub';
 			this.render();
 		});
+		titleRow.createEl('h2', { text: '闪卡背诵', cls: 'page-title' });
 
-		const titleSection = header.createDiv();
-		titleSection.createEl('h2', { text: '闪卡背诵', cls: 'page-title' });
+		// 第二行：副标题
+		header.createEl('p', { text: '选择一个卡组开始学习', cls: 'page-subtitle' });
 
 		// 排序按钮
 		const sortContainer = container.createDiv({ cls: 'flashcard-sort' });
@@ -3346,26 +3360,24 @@ export class CombineNotesView extends ItemView {
 		const currentCard = this.currentCards[this.currentCardIndex];
 
 		// 添加返回按钮的头部
-		const header = container.createDiv({ cls: 'page-header-with-back' });
-		const backBtn = header.createDiv({ cls: 'back-btn' });
+		const header = container.createDiv({ cls: 'learning-page-header' });
+
+		// 第一行：返回按钮 + 标题
+		const titleRow = header.createDiv({ cls: 'header-title-row' });
+		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
 			this.learningState = 'flashcard-deck-list';
 			this.render();
 		});
+		titleRow.createEl('h2', { text: this.currentDeck.name, cls: 'page-title' });
 
-		const titleSection = header.createDiv();
-		titleSection.createEl('h2', { text: this.currentDeck.name, cls: 'page-title' });
-
-		// 进度信息
-		const progressInfo = container.createDiv({ cls: 'study-progress' });
-		progressInfo.createEl('p', {
-			text: `卡片 ${this.currentCardIndex + 1} / ${this.currentCards.length}`
-		});
+		// 第二行：副标题
+		header.createEl('p', { text: '通过间隔重复加深记忆', cls: 'page-subtitle' });
 
 		// 创建3D卡片容器
 		const studyContainer = container.createDiv({ cls: 'flashcard-study-container' });
-		const card3d = this.createCardElement(currentCard);
+		const card3d = this.createCardElement(currentCard, this.currentCardIndex, this.currentCards.length);
 		studyContainer.appendChild(card3d);
 
 		// 设置手势操作
@@ -3378,19 +3390,29 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 创建3D卡片元素
 	 */
-	private createCardElement(card: Flashcard): HTMLElement {
+	private createCardElement(card: Flashcard, currentIndex: number, totalCards: number): HTMLElement {
 		const card3d = document.createElement('div');
 		card3d.addClass('flashcard-3d');
 		card3d.addClass('enter'); // 添加进入动画
 
 		// 卡片正面 - 问题
 		const cardFront = card3d.createDiv({ cls: 'card-face card-front' });
+
+		// 添加序号标记（正面）
+		const progressBadgeFront = cardFront.createDiv({ cls: 'card-progress-badge' });
+		progressBadgeFront.setText(`${currentIndex + 1}/${totalCards}`);
+
 		const questionContent = cardFront.createDiv({ cls: 'card-question-content' });
 		questionContent.createEl('h3', { text: '💭 回忆答案' });
 		questionContent.createEl('p', { text: card.question });
 
 		// 卡片背面 - 答案
 		const cardBack = card3d.createDiv({ cls: 'card-face card-back' });
+
+		// 添加序号标记（背面）
+		const progressBadgeBack = cardBack.createDiv({ cls: 'card-progress-badge' });
+		progressBadgeBack.setText(`${currentIndex + 1}/${totalCards}`);
+
 		const answerContent = cardBack.createDiv({ cls: 'card-answer-content' });
 		answerContent.createEl('h3', { text: '✓ 答案' });
 		answerContent.createEl('p', { text: card.answer });
@@ -3705,24 +3727,20 @@ export class CombineNotesView extends ItemView {
 	 */
 	private updateCardDisplay(): void {
 		const studyContainer = this.containerEl.querySelector('.flashcard-study-container');
-		const progressInfo = this.containerEl.querySelector('.study-progress p');
 		const ratingButtons = this.containerEl.querySelector('.rating-buttons');
 
-		if (!studyContainer || !progressInfo || !this.currentDeck) return;
+		if (!studyContainer || !this.currentDeck) return;
 
 		// 移除旧卡片
 		studyContainer.empty();
 
 		// 创建新卡片
 		const currentCard = this.currentCards[this.currentCardIndex];
-		const newCard = this.createCardElement(currentCard);
+		const newCard = this.createCardElement(currentCard, this.currentCardIndex, this.currentCards.length);
 		studyContainer.appendChild(newCard);
 
 		// 设置手势
 		this.setupCardGestures(newCard, currentCard.id);
-
-		// 更新进度
-		progressInfo.textContent = `卡片 ${this.currentCardIndex + 1} / ${this.currentCards.length}`;
 
 		// 重新启用按钮
 		if (ratingButtons) {
