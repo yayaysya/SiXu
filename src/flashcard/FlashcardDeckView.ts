@@ -147,13 +147,6 @@ export class FlashcardDeckView extends ItemView {
 		this.decks.forEach(deck => {
 			this.renderDeckCard(list, deck);
 		});
-
-		if (this.decks.length === 0) {
-			list.createDiv({
-				cls: 'empty-state',
-				text: '暂无闪卡组，点击上方创建新卡组开始学习'
-			});
-		}
 	}
 
 	/**

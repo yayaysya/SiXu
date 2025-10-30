@@ -2311,38 +2311,91 @@ button.mod-cta:hover {
 }
 
 /* 创建新卡组卡片 */
-.deck-card.create-new {
-	background: linear-gradient(135deg, var(--background-secondary) 0%, var(--background-modifier-hover) 100%);
-	border: 2px dashed var(--background-modifier-border);
+/* iOS风格 - 创建新卡组卡片 */
+.deck-card.create-new-ios {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	border-radius: 20px;
+	padding: 0;
+	overflow: hidden;
+	box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+	transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+	position: relative;
+	min-height: 180px;
+	display: flex;
+	flex-direction: column;
 	justify-content: center;
 	align-items: center;
+	cursor: pointer;
+}
+
+.deck-card.create-new-ios:hover {
+	transform: translateY(-5px);
+	box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+}
+
+.deck-card.create-new-ios:active {
+	transform: translateY(-2px);
+}
+
+/* 图标容器 */
+.create-card-icon-container {
+	margin-bottom: 16px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+.create-card-icon-bg {
+	width: 70px;
+	height: 70px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.2);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	animation: pulse 2s ease-in-out infinite;
+}
+
+.create-card-icon {
+	font-size: 32px;
+	color: white;
+	filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* 卡片内容 */
+.create-card-content {
 	text-align: center;
-	min-height: 200px;
+	padding: 0 20px;
 }
 
-.deck-card.create-new:hover {
-	border-color: var(--interactive-accent);
-	background: linear-gradient(135deg, var(--background-modifier-hover) 0%, rgba(var(--interactive-accent-rgb, 88, 135, 207), 0.15) 100%);
-}
-
-.deck-card.create-new .deck-icon {
-	font-size: 3em;
-	margin-bottom: 12px;
-	color: var(--interactive-accent);
-	opacity: 0.8;
-}
-
-.deck-card.create-new h3 {
+.create-card-content h3 {
 	margin: 0 0 8px 0;
-	font-size: 1.2em;
-	font-weight: 600;
-	color: var(--text-normal);
+	font-size: 1.3em;
+	font-weight: 700;
+	color: white;
+	text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	letter-spacing: 0.3px;
 }
 
-.deck-card.create-new p {
+.create-card-content p {
 	margin: 0;
-	font-size: 0.9em;
-	color: var(--text-muted);
+	font-size: 0.95em;
+	color: rgba(255, 255, 255, 0.9);
+	font-weight: 500;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 脉冲动画 */
+@keyframes pulse {
+	0%, 100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.05);
+	}
 }
 
 /* 卡组标题行 */
@@ -3027,4 +3080,33 @@ button.mod-cta:hover {
 
 .source-popover-actions button.mod-cta:hover {
 	background: var(--interactive-accent-hover);
+}
+
+/* 移动端评分按钮增强样式 */
+.rating-btn.mobile-style {
+	text-indent: 0 !important;
+	padding: 20px 15px;
+	min-height: 80px;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	gap: 8px;
+	background: var(--background-secondary) !important;
+	border: 2px solid var(--background-modifier-border) !important;
+}
+
+.rating-btn.mobile-style .rating-btn-label {
+	font-size: 16px;
+	font-weight: 700;
+	margin: 0;
+	text-indent: 0;
+}
+
+.rating-btn.mobile-style .rating-btn-desc {
+	font-size: 12px;
+	font-weight: 200;
+	margin: 0;
+	text-indent: 0;
+	opacity: 0.8;
 }

@@ -125,6 +125,27 @@ export class CombineNotesView extends ItemView {
 		this.statisticsManager = new StatisticsManager(this.app, this.plugin);
 	}
 
+	/**
+	 * 检测是否为移动设备（多重检测机制）
+	 */
+	private isMobileDevice(): boolean {
+		const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+		const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+		const isMobileUA = mobileRegex.test(userAgent);
+
+		const hasTouchPoint = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+		const isNarrowScreen = window.innerWidth <= 768;
+		const hasCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+		let mobileCount = 0;
+		if (isMobileUA) mobileCount++;
+		if (hasTouchPoint) mobileCount++;
+		if (isNarrowScreen) mobileCount++;
+		if (hasCoarsePointer) mobileCount++;
+
+		return mobileCount >= 2;
+	}
+
 	getViewType(): string {
 		return COMBINE_VIEW_TYPE;
 	}
@@ -3035,11 +3056,18 @@ export class CombineNotesView extends ItemView {
 			decks = this.sortDecks(decks);
 
 			// 先添加"创建新卡组"卡片（放在最前面）
-			const createCard = deckContainer.createDiv({ cls: 'deck-card create-new' });
-			const icon = createCard.createDiv({ cls: 'deck-icon' });
-			icon.setText('➕');
-			createCard.createEl('h3', { text: '创建新卡组' });
-			createCard.createEl('p', { text: '从笔记生成学习卡片' });
+			const createCard = deckContainer.createDiv({ cls: 'deck-card create-new-ios' });
+
+			// 卡片头部图标区域
+			const iconContainer = createCard.createDiv({ cls: 'create-card-icon-container' });
+			const iconBg = iconContainer.createDiv({ cls: 'create-card-icon-bg' });
+			const icon = iconBg.createDiv({ cls: 'create-card-icon' });
+			icon.setText('✨');
+
+			// 卡片内容区域
+			const content = createCard.createDiv({ cls: 'create-card-content' });
+			content.createEl('h3', { text: '创建新卡组' });
+			content.createEl('p', { text: '从笔记生成学习卡片' });
 
 			createCard.addEventListener('click', () => {
 				this.openCreateDeckModal();
@@ -3520,25 +3548,35 @@ export class CombineNotesView extends ItemView {
 	 * 渲染评分按钮
 	 */
 	private renderRatingButtons(container: HTMLElement, cardId: string): void {
-		const ratingButtons = container.createDiv({ cls: 'rating-buttons' });
+		const isMobile = this.isMobileDevice();
+
+		const ratingButtons = container.createDiv({
+			cls: 'rating-buttons' + (isMobile ? ' mobile' : '')
+		});
 
 		const ratings = [
-			{ label: '忘记', value: 0, desc: '完全不记得' },
-			{ label: '困难', value: 1, desc: '勉强想起来' },
-			{ label: '熟悉', value: 2, desc: '回忆正确' },
-			{ label: '简单', value: 3, desc: '轻松回答' }
+			{ label: '忘记', value: 0, desc: '完全不记得', color: '#ff4757' },
+			{ label: '困难', value: 1, desc: '勉强想起来', color: '#ffa502' },
+			{ label: '熟悉', value: 2, desc: '回忆正确', color: '#1e90ff' },
+			{ label: '简单', value: 3, desc: '轻松回答', color: '#2ed573' }
 		];
 
 		ratings.forEach(rating => {
 			const btn = ratingButtons.createEl('button', {
-				cls: 'rating-btn'
+				cls: 'rating-btn',
+				attr: {
+					'data-rating': rating.value
+				}
 			});
 
-			// 设置完整文字（PC端显示）
-			btn.textContent = `${rating.label}\n${rating.desc}`;
-
-			// 添加短文本属性（移动端使用）
-			btn.setAttribute('data-short-label', rating.label);
+			if (isMobile) {
+				// 移动端：只显示标签，彩色文字 + 加粗
+				btn.innerHTML = `<div class="rating-btn-label" style="color: ${rating.color}; text-indent: 0;">${rating.label}</div>`;
+				btn.addClass('mobile-style');
+			} else {
+				// PC端：显示完整文字
+				btn.textContent = `${rating.label}\n${rating.desc}`;
+			}
 
 			btn.addEventListener('click', async () => {
 				// 禁用所有按钮
@@ -3572,56 +3610,109 @@ export class CombineNotesView extends ItemView {
 	}
 
 	/**
-	 * 设置卡片手势操作
+	 * 设置卡片手势操作（区分移动端和PC端）
 	 */
 	private setupCardGestures(cardEl: HTMLElement, cardId: string): void {
 		// 先清理旧监听器，防止累积
 		this.cleanupGestureListeners();
 
+		const isMobile = this.isMobileDevice();
+		console.log('[FlashCard] 设备检测:', isMobile ? '移动端' : 'PC端');
+
+		if (isMobile) {
+			// 移动端：只处理点击翻转，避免与系统手势冲突
+			this.setupMobileGestures(cardEl);
+		} else {
+			// PC端：完整手势支持（拖拽+评分）
+			this.setupDesktopGestures(cardEl, cardId);
+		}
+	}
+
+	/**
+	 * 移动端手势：只处理点击翻转
+	 */
+	private setupMobileGestures(cardEl: HTMLElement): void {
+		let tapStartTime = 0;
+		let tapStartX = 0;
+		let tapStartY = 0;
+
+		const handleTouchStart = (e: TouchEvent) => {
+			// 防止按钮点击
+			if ((e.target as HTMLElement).tagName === 'BUTTON') {
+				return;
+			}
+
+			tapStartTime = Date.now();
+			tapStartX = e.touches[0].clientX;
+			tapStartY = e.touches[0].clientY;
+		};
+
+		const handleTouchEnd = (e: TouchEvent) => {
+			// 防止按钮点击
+			if ((e.target as HTMLElement).tagName === 'BUTTON') {
+				return;
+			}
+
+			const tapEndTime = Date.now();
+			const tapEndX = e.changedTouches[0].clientX;
+			const tapEndY = e.changedTouches[0].clientY;
+
+			const deltaX = Math.abs(tapEndX - tapStartX);
+			const deltaY = Math.abs(tapEndY - tapStartY);
+			const duration = tapEndTime - tapStartTime;
+
+			// 判断为点击：时间短且无明显移动
+			if (deltaX < 5 && deltaY < 5 && duration < 300) {
+				// 防止快速连续翻转
+				const now = Date.now();
+				if (now - this.lastFlipTime < this.flipDebounceMs) {
+					console.log('[FlashCard] 翻转防抖期内，忽略');
+					return;
+				}
+
+				console.log('[FlashCard] 移动端点击翻转');
+				this.toggleCardFlip(cardEl);
+				this.lastFlipTime = now;
+			}
+			// 注意：不处理滑动手势，让系统处理浏览器返回等操作
+		};
+
+		// 只绑定触摸事件（不绑定滑动）
+		cardEl.addEventListener('touchstart', handleTouchStart, { passive: true });
+		cardEl.addEventListener('touchend', handleTouchEnd, { passive: true });
+	}
+
+	/**
+	 * PC端手势：完整拖拽支持
+	 */
+	private setupDesktopGestures(cardEl: HTMLElement, cardId: string): void {
 		let startX = 0;
 		let currentX = 0;
 		let isDragging = false;
 		let dragStartTime = 0;
-		let hasFlipped = false; // 防止重复翻转
+		let hasFlipped = false;
 
-		const handleDragStart = (e: MouseEvent | TouchEvent) => {
-			// 只阻止按钮点击，允许翻转后的卡片继续响应
+		const handleDragStart = (e: MouseEvent) => {
+			// 只阻止按钮点击
 			if ((e.target as HTMLElement).tagName === 'BUTTON') {
-				console.log('[FlashCard] 点击了按钮，忽略');
 				return;
 			}
 
-			console.log('[FlashCard] 开始拖动/点击', {
-				isFlipped: cardEl.hasClass('flipped'),
-				eventType: 'touches' in e ? 'touch' : 'mouse'
-			});
-
 			isDragging = true;
-			hasFlipped = false; // 重置翻转标志
+			hasFlipped = false;
 			dragStartTime = Date.now();
-			startX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+			startX = e.clientX;
 			currentX = startX;
 
 			cardEl.addClass('dragging');
 		};
 
-		const handleDragMove = (e: MouseEvent | TouchEvent) => {
+		const handleDragMove = (e: MouseEvent) => {
 			if (!isDragging) return;
 
-			e.preventDefault();
 			const prevX = currentX;
-			currentX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+			currentX = e.clientX;
 			const deltaX = currentX - startX;
-
-			// 只在移动超过5px时打印，避免日志过多
-			if (Math.abs(deltaX) > 5 && Math.abs(deltaX - (prevX - startX)) > 2) {
-				console.log('[FlashCard] 拖动中', {
-					deltaX,
-					prevX,
-					currentX,
-					startX
-				});
-			}
 
 			// 应用位移
 			cardEl.style.transform = `translateX(${deltaX}px) rotate(${deltaX * 0.1}deg)`;
@@ -3642,25 +3733,10 @@ export class CombineNotesView extends ItemView {
 		};
 
 		const handleDragEnd = async (e?: Event) => {
-			console.log('[FlashCard] 拖动/点击结束', {
-				isDragging,
-				hasFlipped,
-				eventType: e ? e.type : 'unknown',
-				startX,
-				currentX,
-				deltaX: currentX - startX,
-				duration: Date.now() - dragStartTime,
-				timeSinceLastFlip: Date.now() - this.lastFlipTime
-			});
+			if (!isDragging) return;
 
-			if (!isDragging) {
-				console.log('[FlashCard] isDragging为false，直接返回');
-				return;
-			}
-
-			// 防止重复翻转（局部标志）
+			// 防止重复翻转
 			if (hasFlipped) {
-				console.log('[FlashCard] 已经翻转过了（局部标志），忽略重复触发');
 				return;
 			}
 
@@ -3677,61 +3753,26 @@ export class CombineNotesView extends ItemView {
 			// 判断是点击还是拖拽
 			if (Math.abs(deltaX) < 5 && dragDuration < 300) {
 				// 这是点击操作，翻转卡片
-				hasFlipped = true; // 标记已翻转，防止重复
+				hasFlipped = true;
 
-				// 阻止触摸事件的默认行为（防止移动端生成合成点击事件）
-				if (e && e.type === 'touchend') {
-					e.preventDefault();
-					console.log('[FlashCard] 已阻止touchend的默认行为');
-				}
-
-				console.log('[FlashCard] 判定为点击操作，执行翻转', {
-					deltaX,
-					duration: dragDuration,
-					wasFlipped: cardEl.hasClass('flipped'),
-					eventType: e ? e.type : 'unknown'
-				});
-
-				// 防止快速连续翻转（全局时间戳检查）
+				// 防止快速连续翻转
 				const now = Date.now();
 				if (now - this.lastFlipTime < this.flipDebounceMs) {
-					console.log('[FlashCard] 翻转防抖期内，忽略', {
-						timeSinceLastFlip: now - this.lastFlipTime,
-						debounceMs: this.flipDebounceMs
-					});
 					return;
 				}
 
-				// 完全移除内联transform，让CSS类生效
+				// 移除内联transform
 				cardEl.style.removeProperty('transform');
 				cardEl.style.setProperty('--drag-opacity', '0');
 
-				console.log('[FlashCard] 移除内联transform后，准备翻转', {
-					inlineTransform: cardEl.style.transform,
-					computedTransform: window.getComputedStyle(cardEl).transform
-				});
-
 				this.toggleCardFlip(cardEl);
-
-				// 更新全局防抖时间戳
-				this.lastFlipTime = Date.now();
-
-				console.log('[FlashCard] 翻转完成', {
-					nowFlipped: cardEl.hasClass('flipped'),
-					inlineTransform: cardEl.style.transform,
-					computedTransform: window.getComputedStyle(cardEl).transform,
-					newLastFlipTime: this.lastFlipTime
-				});
+				this.lastFlipTime = now;
 				return;
 			}
 
 			if (Math.abs(deltaX) >= threshold) {
 				// 超过阈值，触发评分
 				const rating = deltaX < 0 ? 0 : 3; // 左滑=忘记(0)，右滑=简单(3)
-				console.log('[FlashCard] 判定为滑动评分', {
-					deltaX,
-					rating
-				});
 
 				// 禁用按钮
 				const ratingButtons = this.containerEl.querySelector('.rating-buttons');
@@ -3745,28 +3786,21 @@ export class CombineNotesView extends ItemView {
 				await this.animateCardExit(rating as 0 | 3, cardId);
 			} else {
 				// 未超过阈值，回弹
-				console.log('[FlashCard] 拖动距离不足，回弹', { deltaX });
-				// 完全移除内联transform，让CSS类生效
 				cardEl.style.removeProperty('transform');
 				cardEl.style.setProperty('--drag-opacity', '0');
 			}
 		};
 
-		// 绑定事件
-		cardEl.addEventListener('mousedown', handleDragStart as any);
-		cardEl.addEventListener('touchstart', handleDragStart as any);
+		// 绑定鼠标事件
+		cardEl.addEventListener('mousedown', handleDragStart);
 
-		// 保存监听器引用以便后续清理
-		this.gestureListeners.mousemove = handleDragMove as any;
-		this.gestureListeners.touchmove = handleDragMove as any;
-		this.gestureListeners.mouseup = handleDragEnd as any;
-		this.gestureListeners.touchend = handleDragEnd as any;
+		// 保存监听器引用
+		this.gestureListeners.mousemove = handleDragMove;
+		this.gestureListeners.mouseup = handleDragEnd;
 
-		// 使用保存的引用绑定到document
-		document.addEventListener('mousemove', this.gestureListeners.mousemove!);
-		document.addEventListener('touchmove', this.gestureListeners.touchmove!, { passive: false });
-		document.addEventListener('mouseup', this.gestureListeners.mouseup!);
-		document.addEventListener('touchend', this.gestureListeners.touchend!);
+		// 绑定到document
+		document.addEventListener('mousemove', this.gestureListeners.mousemove);
+		document.addEventListener('mouseup', this.gestureListeners.mouseup);
 	}
 
 	/**
