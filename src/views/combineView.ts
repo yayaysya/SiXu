@@ -3034,17 +3034,7 @@ export class CombineNotesView extends ItemView {
 			// 应用排序
 			decks = this.sortDecks(decks);
 
-			if (decks.length === 0) {
-				const empty = deckContainer.createDiv({ cls: 'empty-state' });
-				empty.createEl('p', { text: '暂无闪卡组，请先创建一个卡组' });
-			} else {
-				// 渲染每个卡组
-				for (const deck of decks) {
-					this.renderDeckCard(deckContainer, deck, storage);
-				}
-			}
-
-			// 添加"创建新卡组"卡片
+			// 先添加"创建新卡组"卡片（放在最前面）
 			const createCard = deckContainer.createDiv({ cls: 'deck-card create-new' });
 			const icon = createCard.createDiv({ cls: 'deck-icon' });
 			icon.setText('➕');
@@ -3054,6 +3044,16 @@ export class CombineNotesView extends ItemView {
 			createCard.addEventListener('click', () => {
 				this.openCreateDeckModal();
 			});
+
+			if (decks.length === 0) {
+				const empty = deckContainer.createDiv({ cls: 'empty-state' });
+				empty.createEl('p', { text: '暂无闪卡组，请先创建一个卡组' });
+			} else {
+				// 渲染每个卡组（在创建新卡组卡片之后）
+				for (const deck of decks) {
+					this.renderDeckCard(deckContainer, deck, storage);
+				}
+			}
 
 			// 多选操作栏
 			if (this.selectedDeckIds.size > 0) {
