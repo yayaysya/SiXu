@@ -3085,26 +3085,26 @@ button.mod-cta:hover {
 /* 移动端评分按钮增强样式 */
 .rating-btn.mobile-style {
 	text-indent: 0 !important;
-	padding: 20px 15px;
-	min-height: 80px;
+	padding: 10px 15px;
+	min-height: 50px;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
-	gap: 8px;
+	gap: 4px;
 	background: var(--background-secondary) !important;
 	border: 2px solid var(--background-modifier-border) !important;
 }
 
 .rating-btn.mobile-style .rating-btn-label {
-	font-size: 16px;
+	font-size: 14px;
 	font-weight: 700;
 	margin: 0;
 	text-indent: 0;
 }
 
 .rating-btn.mobile-style .rating-btn-desc {
-	font-size: 12px;
+	font-size: 11px;
 	font-weight: 200;
 	margin: 0;
 	text-indent: 0;
