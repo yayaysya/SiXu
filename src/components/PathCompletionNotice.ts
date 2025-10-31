@@ -1,4 +1,4 @@
-import { App, Modal, Notice, setIcon } from 'obsidian';
+import { App, Modal, Notice, setIcon, TFile } from 'obsidian';
 import { LearningPathConfig, LearningPathOutline } from '../learningPath/types';
 import { LearningPathFlashcardService } from '../learningPath/LearningPathFlashcardService';
 import NotebookLLMPlugin from '../main';
@@ -212,7 +212,7 @@ export class PathCompletionNotice extends Modal {
 		const stepsList = stepsContainer.createDiv({ cls: 'steps-list' });
 
 		const steps = [
-			{ icon: '📂', text: '查看文件夹，开始学习' },
+			{ icon: '🚀', text: '开始学习第一个文件' },
 			{ icon: '🃏', text: '为核心概念生成闪卡' },
 			{ icon: '📝', text: '创建学习笔记' },
 			{ icon: '🔄', text: '分享给朋友学习' }
@@ -231,19 +231,19 @@ export class PathCompletionNotice extends Modal {
 	private createButtonSection(container: HTMLElement): void {
 		const buttonContainer = container.createDiv({ cls: 'notice-button-container' });
 
-		// 查看文件夹按钮
-		const viewFolderBtn = buttonContainer.createEl('button', {
+		// 开始学习按钮
+		const startLearningBtn = buttonContainer.createEl('button', {
 			text: '',
 			cls: 'notice-button primary'
 		});
 
 		// 设置图标和文本
-		const folderIcon = viewFolderBtn.createSpan({ cls: 'button-icon' });
-		setIcon(folderIcon, 'folder');
-		viewFolderBtn.createSpan({ text: '查看文件夹', cls: 'button-text' });
+		const playIcon = startLearningBtn.createSpan({ cls: 'button-icon' });
+		setIcon(playIcon, 'play');
+		startLearningBtn.createSpan({ text: '开始学习', cls: 'button-text' });
 
-		viewFolderBtn.addEventListener('click', () => {
-			this.openFolder();
+		startLearningBtn.addEventListener('click', () => {
+			this.openFirstLearningFile();
 		});
 
 		// 生成闪卡按钮
@@ -276,33 +276,73 @@ export class PathCompletionNotice extends Modal {
 	}
 
 	/**
-	 * 打开文件夹
+	 * 打开第一个学习文件
 	 */
-	private openFolder(): void {
-		const targetPath = `${this.config.targetDirectory}/${this.outline.title}`;
-
-		// 尝试在Obsidian中打开文件夹
+	private async openFirstLearningFile(): Promise<void> {
 		try {
-			// 检查文件夹是否存在
-			const folder = this.app.vault.getAbstractFileByPath(targetPath);
-			if (folder) {
-				// 尝试在文件浏览器中显示该文件夹
-				// 注意：这个API可能不稳定，在某些版本中可能不可用
-				try {
-					(this.app as any).fileExplorer?.reveal?.(folder);
-				} catch (e) {
-					// 如果fileExplorer不可用，我们只能显示成功消息
-					console.log('文件夹已创建:', targetPath);
-				}
-			} else {
-				new Notice('文件夹不存在或已被移动');
-			}
-		} catch (error) {
-			console.error('打开文件夹失败:', error);
-			new Notice('打开文件夹失败');
-		}
+			console.log('🚀 开始查找第一个学习文件');
 
-		this.close();
+			let firstFilePath: string | null = null;
+			let fileName: string | null = null;
+
+			// 优先从已创建的文件列表中查找第一个文件
+			if (this.createdFiles && this.createdFiles.length > 0) {
+				firstFilePath = this.createdFiles[0];
+				fileName = firstFilePath.split('/').pop() || firstFilePath;
+				console.log(`从createdFiles找到第一个文件: ${firstFilePath}`);
+			}
+
+			// 如果createdFiles为空，则从outline中查找第一个启用的文件
+			if (!firstFilePath) {
+				const enabledFiles = this.outline.files.filter(f => f.enabled);
+				if (enabledFiles.length > 0) {
+					const firstFile = enabledFiles[0];
+					// 尝试多种可能的路径格式
+					const possiblePaths = [
+						`${this.outline.title}/${firstFile.filename}`,
+						`${this.outline.title}/${firstFile.filename}.md`,
+						firstFile.filename,
+						`${firstFile.filename}.md`
+					];
+
+					for (const path of possiblePaths) {
+						const fileObj = this.app.vault.getAbstractFileByPath(path);
+						if (fileObj instanceof TFile) {
+							firstFilePath = path;
+							fileName = firstFile.title;
+							console.log(`从outline找到第一个文件: ${firstFilePath}`);
+							break;
+						}
+					}
+				}
+			}
+
+			if (!firstFilePath) {
+				new Notice('未找到可用的学习文件');
+				return;
+			}
+
+			// 获取文件对象
+			const file = this.app.vault.getAbstractFileByPath(firstFilePath);
+			if (!(file instanceof TFile)) {
+				new Notice(`文件不存在或格式错误: ${fileName}`);
+				return;
+			}
+
+			// 在新标签页中打开文件
+			const leaf = this.app.workspace.getLeaf(false);
+			await leaf.openFile(file);
+
+			console.log(`✅ 成功打开学习文件: ${fileName}`);
+			new Notice(`已打开学习文件: ${fileName}`, 3000);
+
+			// 关闭完成通知模态框
+			this.close();
+
+		} catch (error) {
+			console.error('打开学习文件失败:', error);
+			new Notice(`打开文件失败: ${error.message}`, 5000);
+		}
 	}
 
 	/**
