@@ -13,6 +13,7 @@ import { PathPreviewModal } from '../components/PathPreviewModal';
 import { PathCompletionNotice } from '../components/PathCompletionNotice';
 import { LearningPathConfig, LearningPathOutline } from '../learningPath/types';
 import { PathTaskQueue } from '../learningPath/PathTaskQueue';
+import { UserProfileView } from '../components/profile/UserProfileView';
 
 export const COMBINE_VIEW_TYPE = 'notebook-llm-combine-view';
 
@@ -93,6 +94,9 @@ export class CombineNotesView extends ItemView {
 	private currentCardIndex: number = 0;
 	private studyStartTime: number = 0;
 	private deckSortMode: 'time' | 'name' | 'cards' = 'time';
+
+	// 个人资料视图
+	private userProfileView: UserProfileView | null = null;
 
 	// 手势监听器管理（用于清理，防止累积）
 	private gestureListeners: {
@@ -196,6 +200,12 @@ export class CombineNotesView extends ItemView {
 	async onClose(): Promise<void> {
 		// 清理手势监听器
 		this.cleanupGestureListeners();
+
+		// 清理个人资料视图
+		if (this.userProfileView) {
+			this.userProfileView.destroy();
+			this.userProfileView = null;
+		}
 
 		// 清理事件监听器
 		if (this.fileChangeEventRef) {
@@ -4076,18 +4086,207 @@ export class CombineNotesView extends ItemView {
 		container.empty();
 		container.addClass('profile-page');
 
-		const placeholder = container.createDiv({ cls: 'under-construction' });
+		try {
+			// 直接在容器中创建个人资料视图，标题创建逻辑移到组件内部
+			this.userProfileView = new UserProfileView(container, this.app);
+			this.userProfileView.render();
 
-		// 图标
-		const icon = placeholder.createDiv({ cls: 'construction-icon' });
-		icon.setText('🚧');
+		} catch (error) {
+			console.error('渲染个人资料页面失败:', error);
 
-		// 文字
-		placeholder.createEl('h2', { text: '页面正在装修中' });
-		placeholder.createEl('p', {
-			text: '此功能正在开发中，敬请期待！',
-			cls: 'construction-message'
-		});
+			// 显示错误信息
+			const errorContainer = container.createDiv({ cls: 'profile-error-container' });
+			errorContainer.createDiv({ cls: 'error-icon' }).setText('⚠️');
+			errorContainer.createEl('h3', { text: '页面加载失败' });
+			errorContainer.createDiv({ cls: 'error-message' }).setText('请重试或联系技术支持');
+		}
+	}
+
+	/**
+	 * 更新个人资料数据
+	 */
+	private updateProfileData(): void {
+		if (!this.userProfileView) return;
+
+		try {
+			// 获取统计数据
+			const stats = this.getProfileStats();
+			this.userProfileView.updateStats(stats);
+
+			// 获取用户基本信息
+			const userInfo = this.getUserBasicInfo();
+			this.userProfileView.updateUserInfo(userInfo);
+
+		} catch (error) {
+			console.error('更新个人资料数据失败:', error);
+		}
+	}
+
+	/**
+	 * 获取个人资料统计数据
+	 */
+	private getProfileStats(): any[] {
+		try {
+			// 暂时使用模拟数据，后续可以集成实际的统计方法
+			const flashcardStats = {
+				totalCards: 200,
+				masteredCards: 156
+			};
+
+			// 获取Quiz统计数据 (暂时使用模拟数据)
+			const quizStats = {
+				averageAccuracy: 85.5
+			};
+
+			// 获取组合笔记统计数据 (暂时使用模拟数据)
+			const notesStats = {
+				totalNotes: 42
+			};
+
+			// 计算总学习时长（模拟数据）
+			const totalStudyHours = this.calculateTotalStudyHours();
+
+			return [
+				{
+					id: 'mastered_flashcards',
+					label: '掌握闪卡',
+					value: flashcardStats.masteredCards,
+					icon: '🎯',
+					unit: '张',
+					progress: flashcardStats.totalCards > 0 ? (flashcardStats.masteredCards / flashcardStats.totalCards) * 100 : 0,
+					color: 'blue'
+				},
+				{
+					id: 'quiz_accuracy',
+					label: 'Quiz正确率',
+					value: quizStats.averageAccuracy,
+					icon: '📝',
+					unit: '%',
+					progress: quizStats.averageAccuracy,
+					color: 'green'
+				},
+				{
+					id: 'combined_notes',
+					label: '组合笔记',
+					value: notesStats.totalNotes,
+					icon: '📚',
+					unit: '篇',
+					progress: Math.min((notesStats.totalNotes / 50) * 100, 100), // 假设50篇为满进度
+					color: 'orange'
+				},
+				{
+					id: 'total_study_time',
+					value: totalStudyHours,
+					label: '总学习时长',
+					icon: '⏰',
+					unit: '小时',
+					progress: Math.min((totalStudyHours / 200) * 100, 100), // 假设200小时为满进度
+					color: 'purple'
+				}
+			];
+		} catch (error) {
+			console.error('获取统计数据失败:', error);
+			return [];
+		}
+	}
+
+	/**
+	 * 获取用户基本信息
+	 */
+	private getUserBasicInfo(): any {
+		try {
+			// 暂时使用默认用户信息，后续可以扩展设置
+			return {
+				username: '思序学习者',
+				studyDays: this.calculateStudyDays(),
+				level: this.calculateUserLevel(),
+				avatar: undefined
+			};
+		} catch (error) {
+			console.error('获取用户基本信息失败:', error);
+			return {
+				username: '思序学习者',
+				studyDays: 1,
+				level: 1
+			};
+		}
+	}
+
+	/**
+	 * 计算学习天数
+	 */
+	private calculateStudyDays(): number {
+		try {
+			// 这里应该从用户数据中计算实际的学习天数
+			// 暂时返回模拟数据
+			return 45;
+		} catch (error) {
+			return 1;
+		}
+	}
+
+	/**
+	 * 计算用户等级
+	 */
+	private calculateUserLevel(): number {
+		try {
+			// 基于学习时长和成就数量计算等级
+			const studyHours = this.calculateTotalStudyHours();
+			const achievementsCount = this.getUserAchievements().length;
+
+			// 简单的等级计算公式
+			return Math.floor((studyHours / 20) + (achievementsCount / 3)) + 1;
+		} catch (error) {
+			return 1;
+		}
+	}
+
+	/**
+	 * 计算总学习时长（小时）
+	 */
+	private calculateTotalStudyHours(): number {
+		try {
+			// 这里应该从实际的学习数据中计算
+			// 暂时返回模拟数据
+			return 168.5;
+		} catch (error) {
+			return 0;
+		}
+	}
+
+	/**
+	 * 获取用户成就列表
+	 */
+	private getUserAchievements(): any[] {
+		try {
+			// 这里应该从用户数据中获取实际成就
+			// 暂时返回模拟数据
+			return [
+				{
+					id: 'first_flashcard',
+					name: '初学者',
+					icon: '🎯',
+					description: '创建了第一张闪卡',
+					rarity: 'common'
+				},
+				{
+					id: 'flashcard_master',
+					name: '闪卡大师',
+					icon: '🧠',
+					description: '掌握了100张闪卡',
+					rarity: 'epic'
+				},
+				{
+					id: 'quiz_champion',
+					name: 'Quiz冠军',
+					icon: '🏆',
+					description: 'Quiz平均正确率达到90%',
+					rarity: 'rare'
+				}
+			];
+		} catch (error) {
+			return [];
+		}
 	}
 
 	// ==================== 学习路径相关方法 ====================
