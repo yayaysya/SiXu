@@ -8,6 +8,11 @@ import { formatNumber } from '../utils/format';
 import { FlashcardDeck, Flashcard } from '../flashcard/types';
 import { FlashcardStorage } from '../flashcard/FlashcardStorage';
 import { CreateDeckModal, ConfirmFlashcardsModal, MergeDecksModal } from '../flashcard/FlashcardDeckView';
+import { CreatePathModal } from '../components/CreatePathModal';
+import { PathPreviewModal } from '../components/PathPreviewModal';
+import { PathCompletionNotice } from '../components/PathCompletionNotice';
+import { LearningPathConfig, LearningPathOutline } from '../learningPath/types';
+import { PathTaskQueue } from '../learningPath/PathTaskQueue';
 
 export const COMBINE_VIEW_TYPE = 'notebook-llm-combine-view';
 
@@ -119,10 +124,14 @@ export class CombineNotesView extends ItemView {
 	private showFilterDrawer: boolean = false;
 	private searchDebounceTimer: number | null = null;
 
+	// 学习路径任务队列
+	private pathTaskQueue: PathTaskQueue | null = null;
+
 	constructor(leaf: WorkspaceLeaf, plugin: NotebookLLMPlugin) {
 		super(leaf);
 		this.plugin = plugin;
 		this.statisticsManager = new StatisticsManager(this.app, this.plugin);
+		this.pathTaskQueue = new PathTaskQueue(this.app, plugin);
 	}
 
 	/**
@@ -2772,6 +2781,17 @@ export class CombineNotesView extends ItemView {
 		// 学习选项
 		const options = hub.createDiv({ cls: 'learning-options' });
 
+		// 学习路径 - 新增功能
+		const learningPathCard = options.createDiv({ cls: 'learning-card' });
+		const lpIcon = learningPathCard.createDiv({ cls: 'card-icon-large' });
+		lpIcon.setText('🗺️');
+		learningPathCard.createEl('h3', { text: '学习路径' });
+		learningPathCard.createEl('p', { text: 'AI 生成完整学习计划', cls: 'card-subtitle' });
+
+		learningPathCard.addEventListener('click', () => {
+			this.openCreatePathModal();
+		});
+
 		// Flash Card
 		const flashcardCard = options.createDiv({ cls: 'learning-card' });
 		const fcIcon = flashcardCard.createDiv({ cls: 'card-icon-large' });
@@ -4010,6 +4030,102 @@ export class CombineNotesView extends ItemView {
 			text: '此功能正在开发中，敬请期待！',
 			cls: 'construction-message'
 		});
+	}
+
+	// ==================== 学习路径相关方法 ====================
+
+	/**
+	 * 打开创建学习路径模态框
+	 */
+	private openCreatePathModal(): void {
+		const modal = new CreatePathModal(this.app, (config) => {
+			if (config) {
+				this.startPathGeneration(config);
+			}
+		});
+		modal.open();
+	}
+
+	/**
+	 * 开始学习路径生成流程
+	 */
+	private async startPathGeneration(config: LearningPathConfig): Promise<void> {
+		try {
+			// 显示生成中的Toast
+			new Notice('🎯 正在生成学习路径大纲...', 3000);
+
+			// 生成大纲
+			const { LearningPathGenerator } = await import('../learningPath/LearningPathGenerator');
+			const generator = new LearningPathGenerator(this.app, this.plugin);
+			const outline = await generator.generateOutline(config);
+
+			// 打开预览模态框
+			this.openPathPreviewModal(outline, config);
+
+		} catch (error) {
+			console.error('生成学习路径大纲失败:', error);
+			new Notice(`生成大纲失败: ${error.message}`);
+		}
+	}
+
+	/**
+	 * 打开路径预览模态框
+	 */
+	private openPathPreviewModal(outline: LearningPathOutline, config: LearningPathConfig): void {
+		const modal = new PathPreviewModal(
+			this.app,
+			outline,
+			config,
+			(confirmedOutline, confirmedConfig) => {
+				// 确认创建，启动后台任务
+				this.confirmPathCreation(confirmedOutline, confirmedConfig);
+			},
+			() => {
+				// 返回修改
+				this.openCreatePathModal();
+			}
+		);
+		modal.open();
+	}
+
+	/**
+	 * 确认创建学习路径
+	 */
+	private async confirmPathCreation(outline: LearningPathOutline, config: LearningPathConfig): Promise<void> {
+		try {
+			// 立即显示Toast，不阻塞UI
+			new Notice('✅ 任务已开始！我们正在后台为您创建学习路径，完成后会通知您。', 5000);
+
+			// 创建后台任务
+			if (this.pathTaskQueue) {
+				const taskId = await this.pathTaskQueue.createPathGenerationTask(config, outline);
+				console.log('学习路径任务已创建:', taskId);
+			}
+
+		} catch (error) {
+			console.error('创建学习路径失败:', error);
+			new Notice(`创建失败: ${error.message}`);
+		}
+	}
+
+	/**
+	 * 显示路径完成通知
+	 */
+	private showPathCompletionNotice(
+		config: LearningPathConfig,
+		outline: LearningPathOutline,
+		createdFiles: string[]
+	): void {
+		const modal = new PathCompletionNotice(
+			this.app,
+			config,
+			outline,
+			createdFiles,
+			() => {
+				// 通知关闭后的回调
+			}
+		);
+		modal.open();
 	}
 }
 

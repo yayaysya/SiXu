@@ -3120,3 +3120,575 @@ button.mod-cta:hover {
 	text-indent: 0;
 	opacity: 0.8;
 }
+
+/* ==================== 学习路径样式 ==================== */
+
+/* 学习路径模态框基础样式 */
+.learning-path-modal .modal-content {
+	max-width: 600px;
+	border-radius: 12px;
+}
+
+/* 创建路径模态框样式 */
+.create-path-modal .modal-title {
+	color: var(--text-accent);
+	margin-bottom: 8px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.create-path-modal .modal-subtitle {
+	color: var(--text-muted);
+	margin-bottom: 24px;
+	font-size: 14px;
+}
+
+.create-path-modal .setting-item {
+	margin-bottom: 20px;
+}
+
+.create-path-modal .setting-item-info {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+/* 深度选择样式 */
+.depth-selection-container {
+	margin: 20px 0;
+}
+
+.depth-selection-container .setting-label {
+	font-weight: 600;
+	margin-bottom: 12px;
+	color: var(--text-normal);
+}
+
+.depth-options {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.depth-option {
+	display: flex;
+	align-items: center;
+	padding: 12px;
+	border: 2px solid var(--background-modifier-border);
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.depth-option:hover {
+	border-color: var(--interactive-accent);
+	background-color: var(--background-modifier-hover);
+}
+
+.depth-option.selected {
+	border-color: var(--interactive-accent);
+	background-color: var(--interactive-accent-fg);
+}
+
+.depth-option input[type="radio"] {
+	margin-right: 12px;
+}
+
+.depth-title {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.depth-desc {
+	font-size: 12px;
+	color: var(--text-muted);
+	margin-top: 2px;
+}
+
+/* 路径预览模态框样式 */
+.path-preview-modal .modal-content {
+	max-width: 700px;
+	max-height: 80vh;
+	overflow-y: auto;
+}
+
+.preview-header {
+	text-align: center;
+	margin-bottom: 24px;
+	padding-bottom: 20px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.preview-title {
+	color: var(--text-accent);
+	margin-bottom: 8px;
+	font-size: 24px;
+}
+
+.preview-description {
+	color: var(--text-muted);
+	margin-bottom: 16px;
+}
+
+.depth-badge, .hours-badge {
+	display: inline-block;
+	padding: 4px 12px;
+	border-radius: 20px;
+	font-size: 12px;
+	font-weight: 600;
+	margin: 0 4px;
+}
+
+.depth-badge {
+	background-color: var(--tag-background);
+	color: var(--tag-color);
+}
+
+.hours-badge {
+	background-color: var(--accent-color);
+	color: var(--text-on-accent);
+}
+
+/* 目标信息区域 */
+.target-info-container {
+	background-color: var(--background-secondary);
+	padding: 16px;
+	border-radius: 8px;
+	margin-bottom: 20px;
+}
+
+.info-label {
+	font-weight: 600;
+	margin-bottom: 8px;
+	color: var(--text-normal);
+}
+
+.path-display {
+	font-family: var(--font-monospace);
+	background-color: var(--background-primary);
+	padding: 8px 12px;
+	border-radius: 4px;
+	border: 1px solid var(--background-modifier-border);
+	word-break: break-all;
+}
+
+.stats-container {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 12px;
+}
+
+.stats-text {
+	font-size: 14px;
+	color: var(--text-muted);
+}
+
+/* 文件列表样式 */
+.file-list-container {
+	margin-bottom: 24px;
+}
+
+.list-label {
+	font-weight: 600;
+	margin-bottom: 12px;
+	color: var(--text-normal);
+}
+
+.files-list {
+	max-height: 300px;
+	overflow-y: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background-color: var(--background-secondary);
+}
+
+.file-item {
+	display: flex;
+	align-items: center;
+	padding: 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	cursor: pointer;
+	transition: background-color 0.2s ease;
+}
+
+.file-item:last-child {
+	border-bottom: none;
+}
+
+.file-item:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.file-item.disabled {
+	opacity: 0.5;
+}
+
+.checkbox-container {
+	margin-right: 12px;
+}
+
+.checkbox-container input[type="checkbox"] {
+	width: 18px;
+	height: 18px;
+	cursor: pointer;
+}
+
+.file-info {
+	flex: 1;
+}
+
+.file-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+
+.file-order {
+	font-weight: 600;
+	color: var(--text-accent);
+	font-family: var(--font-monospace);
+}
+
+.file-filename {
+	font-family: var(--font-monospace);
+	color: var(--text-normal);
+}
+
+.file-type-badge {
+	font-size: 11px;
+	padding: 2px 6px;
+	border-radius: 4px;
+	background-color: var(--tag-background);
+	color: var(--tag-color);
+}
+
+.file-title {
+	color: var(--text-muted);
+	font-size: 14px;
+}
+
+/* 选择控制按钮 */
+.selection-controls {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 12px;
+	border-top: 1px solid var(--background-modifier-border);
+	background-color: var(--background-primary);
+}
+
+.control-button {
+	padding: 6px 12px;
+	font-size: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background-color: var(--background-primary);
+	color: var(--text-normal);
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.control-button:hover {
+	background-color: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+}
+
+/* 模态框按钮样式 */
+.modal-back-button {
+	padding: 8px 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background-color: var(--background-primary);
+	color: var(--text-normal);
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.modal-back-button:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.modal-confirm-button {
+	padding: 8px 16px;
+	border: none;
+	border-radius: 6px;
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	cursor: pointer;
+	transition: all 0.2s ease;
+	font-weight: 600;
+}
+
+.modal-confirm-button:hover {
+	background-color: var(--interactive-accent-hover);
+}
+
+.modal-confirm-button:disabled {
+	background-color: var(--background-modifier-border);
+	color: var(--text-muted);
+	cursor: not-allowed;
+}
+
+/* 完成通知样式 */
+.path-completion-notice {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 1000;
+	background-color: var(--background-primary);
+	border-radius: 12px;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+	border: 1px solid var(--background-modifier-border);
+	max-width: 500px;
+	width: 90vw;
+	max-height: 80vh;
+	overflow-y: auto;
+}
+
+.completion-notice-container {
+	padding: 24px;
+}
+
+.notice-header {
+	text-align: center;
+	margin-bottom: 24px;
+}
+
+.notice-icon {
+	font-size: 48px;
+	margin-bottom: 16px;
+}
+
+.notice-title {
+	color: var(--text-accent);
+	margin-bottom: 8px;
+	font-size: 20px;
+}
+
+.notice-subtitle {
+	color: var(--text-muted);
+	font-size: 14px;
+}
+
+/* 统计信息样式 */
+.stats-container {
+	display: flex;
+	justify-content: space-around;
+	margin-bottom: 24px;
+	padding: 16px;
+	background-color: var(--background-secondary);
+	border-radius: 8px;
+}
+
+.stat-item {
+	text-align: center;
+}
+
+.stat-icon {
+	font-size: 24px;
+	margin-bottom: 8px;
+}
+
+.stat-value {
+	font-size: 18px;
+	font-weight: 600;
+	color: var(--text-accent);
+	margin-bottom: 4px;
+}
+
+.stat-label {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+/* 文件预览样式 */
+.files-preview {
+	margin-bottom: 24px;
+}
+
+.preview-title {
+	font-weight: 600;
+	margin-bottom: 12px;
+	color: var(--text-normal);
+}
+
+.files-list {
+	background-color: var(--background-secondary);
+	border-radius: 8px;
+	padding: 12px;
+}
+
+.file-preview-item {
+	display: flex;
+	align-items: center;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.file-preview-item:last-child {
+	border-bottom: none;
+}
+
+.file-icon {
+	margin-right: 12px;
+	font-size: 16px;
+}
+
+.file-name {
+	color: var(--text-normal);
+	font-size: 14px;
+}
+
+.more-files {
+	color: var(--text-muted);
+	font-size: 12px;
+	font-style: italic;
+	text-align: center;
+	padding: 8px 0;
+}
+
+/* 下一步建议样式 */
+.next-steps {
+	margin-bottom: 24px;
+}
+
+.steps-title {
+	font-weight: 600;
+	margin-bottom: 12px;
+	color: var(--text-normal);
+}
+
+.steps-list {
+	background-color: var(--background-secondary);
+	border-radius: 8px;
+	padding: 12px;
+}
+
+.step-item {
+	display: flex;
+	align-items: center;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.step-item:last-child {
+	border-bottom: none;
+}
+
+.step-icon {
+	margin-right: 12px;
+	font-size: 16px;
+}
+
+.step-text {
+	color: var(--text-normal);
+	font-size: 14px;
+}
+
+/* 通知按钮样式 */
+.notice-button-container {
+	display: flex;
+	justify-content: center;
+	gap: 12px;
+}
+
+.notice-button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 16px;
+	border: none;
+	border-radius: 6px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.notice-button.primary {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.notice-button.primary:hover {
+	background-color: var(--interactive-accent-hover);
+}
+
+.notice-button.secondary {
+	background-color: var(--background-secondary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.notice-button.secondary:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.notice-button.close {
+	background-color: transparent;
+	color: var(--text-muted);
+}
+
+.notice-button.close:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.button-icon {
+	display: flex;
+	align-items: center;
+}
+
+.button-text {
+	display: flex;
+	align-items: center;
+}
+
+/* 学习路径卡片样式 */
+.learning-card.learning-path-card {
+	background: linear-gradient(135deg, var(--gradient-1), var(--gradient-2));
+	color: var(--text-on-accent);
+}
+
+.learning-card.learning-path-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.learning-card.learning-path-card .card-icon-large {
+	font-size: 42px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+	.learning-path-modal .modal-content {
+		max-width: 95vw;
+		margin: 20px;
+	}
+
+	.path-preview-modal .modal-content {
+		max-width: 95vw;
+		max-height: 90vh;
+	}
+
+	.depth-options {
+		gap: 12px;
+	}
+
+	.stats-container {
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.notice-button-container {
+		flex-direction: column;
+	}
+
+	.notice-button {
+		width: 100%;
+		justify-content: center;
+	}
+}
