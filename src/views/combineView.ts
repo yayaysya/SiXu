@@ -4121,6 +4121,7 @@ export class CombineNotesView extends ItemView {
 			config,
 			outline,
 			createdFiles,
+			this.plugin,
 			() => {
 				// 通知关闭后的回调
 			}

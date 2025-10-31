@@ -3179,6 +3179,7 @@ button.mod-cta:hover {
 	border-radius: 8px;
 	cursor: pointer;
 	transition: all 0.2s ease;
+	position: relative;
 }
 
 .depth-option:hover {
@@ -3310,7 +3311,9 @@ button.mod-cta:hover {
 	padding: 12px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	cursor: pointer;
-	transition: background-color 0.2s ease;
+	transition: all 0.2s ease;
+	border-radius: 6px;
+	margin: 2px 4px;
 }
 
 .file-item:last-child {
@@ -3319,10 +3322,59 @@ button.mod-cta:hover {
 
 .file-item:hover {
 	background-color: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+}
+
+.file-item.selected {
+	background-color: var(--interactive-accent-fg);
+	border-color: var(--interactive-accent);
 }
 
 .file-item.disabled {
 	opacity: 0.5;
+	background-color: var(--background-modifier-hover);
+}
+
+/* 文件选择器样式 */
+.file-selector-container {
+	margin-right: 12px;
+	display: flex;
+	align-items: center;
+}
+
+.file-selector {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.file-selector-circle {
+	width: 20px;
+	height: 20px;
+	border: 2px solid var(--background-modifier-border);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.2s ease;
+	background-color: var(--background-primary);
+}
+
+.file-item.selected .file-selector-circle {
+	border-color: var(--interactive-accent);
+	background-color: var(--interactive-accent);
+}
+
+.file-selector-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background-color: transparent;
+	transition: all 0.2s ease;
+}
+
+.file-item.selected .file-selector-dot {
+	background-color: var(--text-on-accent);
 }
 
 .checkbox-container {
@@ -3660,6 +3712,93 @@ button.mod-cta:hover {
 
 .learning-card.learning-path-card .card-icon-large {
 	font-size: 42px;
+}
+
+/* 闪卡生成确认对话框样式 */
+.flashcard-confirmation-modal .modal-content {
+	max-width: 400px;
+	padding: 24px;
+}
+
+.confirmation-container {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.confirmation-title {
+	text-align: center;
+	margin: 0;
+	color: var(--text-normal);
+	font-size: 20px;
+	font-weight: 600;
+}
+
+.confirmation-info {
+	background: var(--background-secondary);
+	padding: 16px;
+	border-radius: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.confirmation-info div {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--text-muted);
+	font-size: 14px;
+}
+
+.confirmation-description {
+	text-align: center;
+	color: var(--text-muted);
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.confirmation-description div {
+	margin-bottom: 4px;
+}
+
+.confirmation-buttons {
+	display: flex;
+	gap: 12px;
+	margin-top: 8px;
+}
+
+.confirm-button {
+	flex: 1;
+	padding: 12px 20px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+	border-radius: 6px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.confirm-button:hover {
+	background: var(--interactive-accent-hover);
+	transform: translateY(-1px);
+}
+
+.cancel-button {
+	flex: 1;
+	padding: 12px 20px;
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.cancel-button:hover {
+	background: var(--background-modifier-active-hover);
 }
 
 /* 响应式设计 */

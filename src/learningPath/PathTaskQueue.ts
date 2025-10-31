@@ -117,7 +117,12 @@ export class PathTaskQueue {
 				task.status = 'failed';
 				task.endTime = Date.now();
 				task.error = error.message;
-				new Notice(`学习路径创建失败: ${error.message}`);
+				new Notice(`学习路径创建失败: ${error.message}`, 8000);
+
+				// 如果有部分创建的文件，提供清理选项
+				if (task.createdFiles && task.createdFiles.length > 0) {
+					new Notice(`已创建 ${task.createdFiles.length} 个文件，但任务未完成。请检查文件是否完整。`, 5000);
+				}
 			}
 		} finally {
 			this.isProcessing = false;
@@ -128,10 +133,12 @@ export class PathTaskQueue {
 	 * 处理单个任务
 	 */
 	private async processTask(taskId: string): Promise<void> {
+		console.log('开始处理学习路径任务:', taskId);
 		const task = this.tasks.get(taskId);
 		if (!task) throw new Error('任务不存在');
 
 		const { config, outline } = task;
+		console.log('任务配置:', { topic: config.topic, depth: config.depth });
 
 		// 阶段1: 生成大纲
 		if (!outline) {
@@ -187,6 +194,7 @@ export class PathTaskQueue {
 		}
 
 		// 任务完成
+		console.log('学习路径任务完成:', taskId, '创建文件数:', task.createdFiles?.length || 0);
 		task.status = 'completed';
 		task.progress = 100;
 		task.endTime = Date.now();
@@ -204,16 +212,51 @@ export class PathTaskQueue {
 		const { config, outline } = task;
 		const duration = (task.endTime! - task.startTime) / 1000;
 
+		// 先显示简单的Notice
 		new Notice(
 			`🎉 学习路径 "${outline!.title}" 创建完成！\n` +
 			`📁 位置: ${config.targetDirectory}/${outline!.title}\n` +
 			`⏱️ 用时: ${duration.toFixed(1)}秒\n` +
 			`📄 文件数: ${task.createdFiles?.length || 0}`,
-			8000
+			5000
 		);
 
-		// 触发完成事件（可以在这里添加更多后续操作）
+		// 延迟显示完成通知模态框，让用户看到简单的通知后再显示详细通知
+		setTimeout(() => {
+			this.showCompletionModal(task);
+		}, 1000);
+
+		// 触发完成事件
 		this.onTaskCompleted(task);
+	}
+
+	/**
+	 * 显示完成通知模态框
+	 */
+	private async showCompletionModal(task: PathGenerationTask): Promise<void> {
+		try {
+			console.log('准备显示完成通知模态框:', task.outline?.title);
+			// 动态导入PathCompletionNotice以避免循环依赖
+			const { PathCompletionNotice } = await import('../components/PathCompletionNotice');
+
+			const modal = new PathCompletionNotice(
+				this.app,
+				task.config,
+				task.outline!,
+				task.createdFiles || [],
+				this.plugin,
+				() => {
+					console.log('完成通知模态框已关闭');
+					// 通知关闭后的回调
+				}
+			);
+			console.log('打开完成通知模态框');
+			modal.open();
+		} catch (error) {
+			console.error('显示完成通知模态框失败:', error);
+			// 如果模态框显示失败，至少显示一个简单的通知
+			new Notice('学习路径创建完成！可在文件浏览器中查看生成的文件。');
+		}
 	}
 
 	/**

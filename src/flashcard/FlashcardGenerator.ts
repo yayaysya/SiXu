@@ -194,9 +194,69 @@ ${noteContent}
 	}
 
 	/**
+	 * 从学习路径批量生成闪卡
+	 */
+	async generateFromLearningPath(
+		learningPathFiles: Array<{ path: string; title: string; content?: string }>,
+		pathName: string,
+		progressCallback?: (percent: number, status: string, currentFile?: string) => void
+	): Promise<Array<{ deck: FlashcardDeck; cards: Flashcard[]; fileName: string }>> {
+		const results: Array<{ deck: FlashcardDeck; cards: Flashcard[]; fileName: string }> = [];
+		const totalFiles = learningPathFiles.length;
+
+		for (let i = 0; i < totalFiles; i++) {
+			const file = learningPathFiles[i];
+			const progressPercent = Math.round((i / totalFiles) * 100);
+
+			progressCallback?.(progressPercent, `处理文件: ${file.title}`, file.title);
+
+			try {
+				// 智能推荐闪卡数量
+				const recommendedCount = this.recommendFlashcardCount(file.content?.length || 0);
+
+				// 为每个文件生成独立的卡组
+				const deckName = `${pathName} - ${file.title}`;
+				const result = await this.generateFromNote({
+					count: recommendedCount,
+					sourceNote: file.path,
+					deckName: deckName
+				}, (percent, status) => {
+					const fileProgress = Math.round((i / totalFiles) * 100) + Math.round((percent / 100) * (100 / totalFiles));
+					progressCallback?.(fileProgress, `${file.title}: ${status}`, file.title);
+				});
+
+				results.push({
+					...result,
+					fileName: file.title
+				});
+
+			} catch (error) {
+				console.error(`为文件 ${file.title} 生成闪卡失败:`, error);
+				// 继续处理其他文件，不中断整个流程
+				progressCallback?.(progressPercent, `⚠️ ${file.title}: 生成失败`, file.title);
+			}
+		}
+
+		progressCallback?.(100, '闪卡生成完成');
+		return results;
+	}
+
+	/**
+	 * 智能推荐闪卡数量
+	 */
+	private recommendFlashcardCount(contentLength: number): number {
+		// 基于内容长度的推荐算法
+		if (contentLength < 500) return 3;      // 短内容：3张
+		if (contentLength < 1500) return 5;     // 中等内容：5张
+		if (contentLength < 3000) return 8;     // 长内容：8张
+		if (contentLength < 5000) return 12;    // 很长内容：12张
+		return 15;                              // 超长内容：15张（上限）
+	}
+
+	/**
 	 * 生成唯一ID
 	 */
 	private generateId(): string {
-		return Date.now().toString(36) + Math.random().toString(36).substr(2);
+		return Date.now().toString(36) + Math.random().toString(36).substring(2);
 	}
 }

@@ -75,12 +75,32 @@ export class CreatePathModal extends Modal {
 
 			this.depthRadios.push({ value: option.value, radio });
 
-			// 点击事件
-			label.addEventListener('click', () => {
+			// 点击事件 - 绑定到整个选项容器
+			const selectOption = () => {
 				this.depthRadios.forEach(({ radio, value }) => {
 					radio.checked = value === option.value;
 					radio.parentElement?.toggleClass('selected', value === option.value);
 				});
+			};
+
+			// 整个容器可点击
+			optionContainer.addEventListener('click', (e) => {
+				// 防止点击radio时重复触发
+				if (e.target !== radio) {
+					selectOption();
+				}
+			});
+
+			// label也可点击（保持原有行为）
+			label.addEventListener('click', (e) => {
+				e.preventDefault(); // 防止label的默认行为影响radio状态
+				selectOption();
+			});
+
+			// radio本身的点击事件
+			radio.addEventListener('click', (e) => {
+				e.stopPropagation(); // 防止事件冒泡到容器
+				selectOption();
 			});
 		});
 

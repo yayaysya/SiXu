@@ -11,7 +11,13 @@ export class PathPreviewModal extends Modal {
 	private onBack: () => void;
 
 	// UI元素
-	private fileCheckboxes: { file: LearningPathFile; checkbox: HTMLInputElement }[] = [];
+	private fileCheckboxes: {
+		file: LearningPathFile;
+		checkbox: HTMLInputElement | null;
+		selectorElement?: HTMLElement;
+		selectorCircle?: HTMLElement;
+		selectorDot?: HTMLElement;
+	}[] = [];
 
 	constructor(
 		app: App,
@@ -143,10 +149,26 @@ export class PathPreviewModal extends Modal {
 	private createFileItem(container: HTMLElement, file: LearningPathFile, index: number): void {
 		const fileItem = container.createDiv({ cls: 'file-item' });
 
-		// 复选框
-		const checkboxContainer = fileItem.createDiv({ cls: 'checkbox-container' });
-		const checkbox = checkboxContainer.createEl('input', { type: 'checkbox' });
-		checkbox.checked = file.enabled;
+		// 根据选中状态设置样式
+		if (file.enabled) {
+			fileItem.addClass('selected');
+		}
+
+		// 选择器（类似radio样式）
+		const selectorContainer = fileItem.createDiv({ cls: 'file-selector-container' });
+		const selector = selectorContainer.createDiv({ cls: 'file-selector' });
+
+		// 创建圆形选择器
+		const selectorCircle = selector.createDiv({ cls: 'file-selector-circle' });
+		if (file.enabled) {
+			selectorCircle.addClass('selected');
+		}
+
+		// 内部圆点
+		const selectorDot = selectorCircle.createDiv({ cls: 'file-selector-dot' });
+		if (file.enabled) {
+			selectorDot.addClass('selected');
+		}
 
 		// 文件信息
 		const fileInfo = fileItem.createDiv({ cls: 'file-info' });
@@ -175,21 +197,19 @@ export class PathPreviewModal extends Modal {
 			cls: 'file-title'
 		});
 
-		// 存储复选框引用
-		this.fileCheckboxes.push({ file, checkbox });
+		// 存储选择器引用
+		this.fileCheckboxes.push({
+			file,
+			checkbox: null,
+			selectorElement: fileItem,
+			selectorCircle,
+			selectorDot
+		});
 
 		// 点击切换选中状态
 		fileItem.addEventListener('click', (e) => {
-			if (e.target !== checkbox) {
-				checkbox.checked = !checkbox.checked;
-				this.updateFileEnabled(file, checkbox.checked);
-				this.updateStats();
-			}
-		});
-
-		// 复选框变化事件
-		checkbox.addEventListener('change', () => {
-			this.updateFileEnabled(file, checkbox.checked);
+			const newSelectedState = !file.enabled;
+			this.updateFileEnabled(file, newSelectedState, fileItem, selectorCircle, selectorDot);
 			this.updateStats();
 		});
 	}
@@ -211,17 +231,17 @@ export class PathPreviewModal extends Modal {
 		});
 
 		selectAllBtn.addEventListener('click', () => {
-			this.fileCheckboxes.forEach(({ checkbox, file }) => {
-				checkbox.checked = true;
+			this.fileCheckboxes.forEach(({ file }) => {
 				file.enabled = true;
+				this.updateFileEnabled(file, true);
 			});
 			this.updateStats();
 		});
 
 		deselectAllBtn.addEventListener('click', () => {
-			this.fileCheckboxes.forEach(({ checkbox, file }) => {
-				checkbox.checked = false;
+			this.fileCheckboxes.forEach(({ file }) => {
 				file.enabled = false;
+				this.updateFileEnabled(file, false);
 			});
 			this.updateStats();
 		});
@@ -281,13 +301,30 @@ export class PathPreviewModal extends Modal {
 	/**
 	 * 更新文件启用状态
 	 */
-	private updateFileEnabled(file: LearningPathFile, enabled: boolean): void {
+	private updateFileEnabled(
+		file: LearningPathFile,
+		enabled: boolean,
+		fileItem?: HTMLElement,
+		selectorCircle?: HTMLElement,
+		selectorDot?: HTMLElement
+	): void {
 		file.enabled = enabled;
 
 		// 更新UI视觉状态
-		const fileItem = this.fileCheckboxes.find(({ file: f }) => f === file)?.checkbox.parentElement?.parentElement;
-		if (fileItem) {
+		if (fileItem && selectorCircle && selectorDot) {
+			fileItem.toggleClass('selected', enabled);
 			fileItem.toggleClass('disabled', !enabled);
+			selectorCircle.toggleClass('selected', enabled);
+			selectorDot.toggleClass('selected', enabled);
+		} else {
+			// 通过查找元素来更新（用于全选/取消全选操作）
+			const fileData = this.fileCheckboxes.find(({ file: f }) => f === file);
+			if (fileData && fileData.selectorElement && fileData.selectorCircle && fileData.selectorDot) {
+				fileData.selectorElement.toggleClass('selected', enabled);
+				fileData.selectorElement.toggleClass('disabled', !enabled);
+				fileData.selectorCircle.toggleClass('selected', enabled);
+				fileData.selectorDot.toggleClass('selected', enabled);
+			}
 		}
 	}
 

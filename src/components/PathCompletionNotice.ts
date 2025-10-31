@@ -1,5 +1,8 @@
 import { App, Modal, Notice, setIcon } from 'obsidian';
 import { LearningPathConfig, LearningPathOutline } from '../learningPath/types';
+import { LearningPathFlashcardService } from '../learningPath/LearningPathFlashcardService';
+import NotebookLLMPlugin from '../main';
+import { TaskStatus } from '../types';
 
 /**
  * 学习路径完成通知组件
@@ -8,18 +11,24 @@ export class PathCompletionNotice extends Modal {
 	private config: LearningPathConfig;
 	private outline: LearningPathOutline;
 	private createdFiles: string[];
+	private plugin: NotebookLLMPlugin;
+	private flashcardService: LearningPathFlashcardService;
 
 	constructor(
 		app: App,
 		config: LearningPathConfig,
 		outline: LearningPathOutline,
 		createdFiles: string[],
+		plugin: NotebookLLMPlugin,
 		private handleClose: () => void
 	) {
 		super(app);
 		this.config = config;
 		this.outline = outline;
 		this.createdFiles = createdFiles;
+		this.plugin = plugin;
+
+		this.flashcardService = new LearningPathFlashcardService(app, this.plugin);
 
 		// 设置模态框样式
 		this.modalEl.addClass('path-completion-notice');
@@ -299,16 +308,169 @@ export class PathCompletionNotice extends Modal {
 	/**
 	 * 生成闪卡
 	 */
-	private generateFlashcards(): void {
-		// 这里需要调用闪卡生成功能
-		// 由于这涉及到与现有闪卡系统的集成，我们先显示一个提示
-		new Notice('闪卡生成功能正在开发中...');
+	private async generateFlashcards(): Promise<void> {
+		try {
+			// 显示开始提示
+			new Notice('🚀 开始生成闪卡...');
 
-		// TODO: 实现闪卡生成逻辑
-		// 1. 收集学习路径文件内容
-		// 2. 调用 FlashcardGenerator
-		// 3. 显示闪卡确认对话框
+			// 禁用按钮，防止重复点击
+			const flashcardBtn = this.modalEl.querySelector('.notice-button.secondary') as HTMLButtonElement;
+			if (flashcardBtn) {
+				flashcardBtn.disabled = true;
+				flashcardBtn.textContent = '生成中...';
+			}
 
-		this.close();
+			// 创建任务ID
+			const taskId = `flashcard_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+			// 注册进度回调到状态栏
+			this.plugin.taskQueue.onProgress(taskId, (progress, status, message) => {
+				if (this.plugin.statusBarManager) {
+					this.plugin.statusBarManager.showTaskStatus(
+						taskId,
+						status as TaskStatus,
+						progress,
+						message
+					);
+				}
+			});
+
+			// 估算推荐数量并显示确认
+			const estimation = await this.flashcardService.estimateRecommendedCards(this.outline);
+
+			const confirmed = await this.showFlashcardConfirmation(estimation);
+			if (!confirmed) {
+				// 清理状态栏
+				if (this.plugin.statusBarManager) {
+					this.plugin.statusBarManager.hide();
+				}
+				this.plugin.taskQueue.offProgress(taskId);
+
+				// 恢复按钮
+				if (flashcardBtn) {
+					flashcardBtn.disabled = false;
+					flashcardBtn.innerHTML = '<span class="button-icon">🃏</span><span class="button-text">生成闪卡</span>';
+				}
+				return;
+			}
+
+			// 开始生成闪卡
+			const result = await this.flashcardService.generateFlashcardsFromPath(
+				this.config,
+				this.outline,
+				this.createdFiles,
+				(percent, status, currentFile) => {
+					// 更新状态栏进度
+					if (this.plugin.statusBarManager) {
+						this.plugin.statusBarManager.showTaskStatus(
+							taskId,
+							TaskStatus.GENERATING,
+							percent,
+							status
+						);
+					}
+				}
+			);
+
+			// 清理状态栏
+			setTimeout(() => {
+				if (this.plugin.statusBarManager) {
+					this.plugin.statusBarManager.hide();
+				}
+				this.plugin.taskQueue.offProgress(taskId);
+			}, 3000);
+
+			// 显示结果
+			if (result.success) {
+				new Notice(`✅ 成功生成 ${result.totalDecks} 个卡组，共 ${result.totalCards} 张闪卡！`, 5000);
+				this.close();
+			} else {
+				new Notice(`❌ 生成过程中遇到错误: ${result.errors.join(', ')}`, 8000);
+				// 恢复按钮
+				if (flashcardBtn) {
+					flashcardBtn.disabled = false;
+					flashcardBtn.innerHTML = '<span class="button-icon">🃏</span><span class="button-text">生成闪卡</span>';
+				}
+			}
+
+		} catch (error) {
+			console.error('生成闪卡失败:', error);
+			new Notice(`生成闪卡失败: ${error.message}`, 8000);
+
+			// 恢复按钮
+			const flashcardBtn = this.modalEl.querySelector('.notice-button.secondary') as HTMLButtonElement;
+			if (flashcardBtn) {
+				flashcardBtn.disabled = false;
+				flashcardBtn.innerHTML = '<span class="button-icon">🃏</span><span class="button-text">生成闪卡</span>';
+			}
+		}
+	}
+
+	/**
+	 * 显示闪卡生成确认对话框
+	 */
+	private async showFlashcardConfirmation(estimation: {
+		totalFiles: number;
+		totalCards: number;
+		estimatedTime: number;
+	}): Promise<boolean> {
+		return new Promise((resolve) => {
+			const confirmModal = new Modal(this.app);
+			confirmModal.modalEl.addClass('flashcard-confirmation-modal');
+
+			confirmModal.onOpen = () => {
+				const { contentEl } = confirmModal;
+				contentEl.empty();
+
+				const container = contentEl.createDiv({ cls: 'confirmation-container' });
+
+				// 标题
+				container.createEl('h3', {
+					text: '🃏 生成学习闪卡',
+					cls: 'confirmation-title'
+				});
+
+				// 预估信息
+				const infoDiv = container.createDiv({ cls: 'confirmation-info' });
+				infoDiv.createDiv({ text: `📁 将处理 ${estimation.totalFiles} 个学习文件` });
+				infoDiv.createDiv({ text: `📝 预计生成 ${estimation.totalCards} 张闪卡` });
+				infoDiv.createDiv({ text: `⏱️ 预计用时: ${estimation.estimatedTime} 分钟` });
+
+				// 说明
+				const descDiv = container.createDiv({ cls: 'confirmation-description' });
+				descDiv.createDiv({ text: '系统将为每个学习文件创建独立的闪卡组，' });
+				descDiv.createDiv({ text: '基于内容智能推荐合适数量的闪卡。' });
+
+				// 按钮组
+				const buttonDiv = container.createDiv({ cls: 'confirmation-buttons' });
+
+				const confirmBtn = buttonDiv.createEl('button', {
+					text: `✅ 生成 ${estimation.totalCards} 张闪卡`,
+					cls: 'confirm-button'
+				});
+
+				const cancelBtn = buttonDiv.createEl('button', {
+					text: '取消',
+					cls: 'cancel-button'
+				});
+
+				confirmBtn.addEventListener('click', () => {
+					confirmModal.close();
+					resolve(true);
+				});
+
+				cancelBtn.addEventListener('click', () => {
+					confirmModal.close();
+					resolve(false);
+				});
+			};
+
+			confirmModal.onClose = () => {
+				const { contentEl } = confirmModal;
+				contentEl.empty();
+			};
+
+			confirmModal.open();
+		});
 	}
 }
