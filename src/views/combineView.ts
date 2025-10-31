@@ -2935,7 +2935,21 @@ export class CombineNotesView extends ItemView {
 
 		// 获取元数据
 		const metadata = this.app.metadataCache.getFileCache(file);
-		const frontmatter = metadata?.frontmatter;
+		let frontmatter = metadata?.frontmatter;
+
+		// 如果metadataCache中没有frontmatter，手动读取文件
+		if (!frontmatter) {
+			console.log(`[Quiz卡片] ${file.basename} 缓存中无frontmatter，手动读取文件...`);
+			try {
+				const content = await this.app.vault.read(file);
+				frontmatter = this.parseQuizFrontmatter(content);
+				console.log(`[Quiz卡片] 手动解析结果:`, frontmatter);
+			} catch (error) {
+				console.error('手动读取Quiz文件失败:', error);
+			}
+		} else {
+			console.log(`[Quiz卡片] ${file.basename} 的frontmatter:`, frontmatter);
+		}
 
 		// 标题
 		const title = card.createEl('h3', { cls: 'quiz-card-title' });
@@ -2945,10 +2959,12 @@ export class CombineNotesView extends ItemView {
 		const meta = card.createDiv({ cls: 'quiz-card-meta' });
 
 		const difficulty = frontmatter?.difficulty || '未知';
-		meta.createSpan({ cls: `difficulty-badge ${difficulty}`, text: difficulty });
+		const difficultyEl = meta.createSpan({ cls: `difficulty-badge ${difficulty}`, text: difficulty });
+		console.log(`[Quiz卡片] 读取到难度:`, difficulty);
 
 		const totalQuestions = frontmatter?.total_questions || 0;
-		meta.createSpan({ cls: 'question-count', text: `${totalQuestions}道题` });
+		const questionEl = meta.createSpan({ cls: 'question-count', text: `${totalQuestions}道题` });
+		console.log(`[Quiz卡片] 读取到题目数:`, totalQuestions);
 
 		// 完成情况
 		const results = frontmatter?.quiz_results || [];
@@ -3985,6 +4001,48 @@ export class CombineNotesView extends ItemView {
 	private renderFlashcardCreate(container: HTMLElement): void {
 		container.empty();
 		container.createEl('p', { text: '创建闪卡功能（通过对话框实现）', cls: 'empty-state' });
+	}
+
+	/**
+	 * 解析Quiz文件的frontmatter
+	 */
+	private parseQuizFrontmatter(content: string): any {
+		const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?/);
+		if (!frontmatterMatch) return {};
+
+		try {
+			const frontmatterStr = frontmatterMatch[1];
+			const frontmatter: any = {};
+
+			// 解析difficulty
+			const difficultyMatch = frontmatterStr.match(/^difficulty:\s*(.+)$/m);
+			if (difficultyMatch) {
+				frontmatter.difficulty = difficultyMatch[1].trim();
+			}
+
+			// 解析total_questions
+			const totalMatch = frontmatterStr.match(/^total_questions:\s*(\d+)/m);
+			if (totalMatch) {
+				frontmatter.total_questions = parseInt(totalMatch[1], 10);
+			}
+
+			// 解析title
+			const titleMatch = frontmatterStr.match(/^title:\s*(.+)$/m);
+			if (titleMatch) {
+				frontmatter.title = titleMatch[1].trim();
+			}
+
+			// 解析quiz_results
+			const resultsMatch = frontmatterStr.match(/^quiz_results:\s*\[(.*)\]/m);
+			if (resultsMatch && resultsMatch[1].trim()) {
+				frontmatter.quiz_results = [];
+			}
+
+			return frontmatter;
+		} catch (error) {
+			console.error('解析Quiz frontmatter失败:', error);
+			return {};
+		}
 	}
 
 	/**
