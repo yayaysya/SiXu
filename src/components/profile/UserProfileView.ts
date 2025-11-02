@@ -1,6 +1,4 @@
 import { App, Notice } from 'obsidian';
-import { BasicInfoCard } from './BasicInfoCard';
-import { AchievementCard } from './AchievementCard';
 import { StatsOverviewCard } from './StatsOverviewCard';
 import { ManagementCenter } from './ManagementCenter';
 
@@ -90,9 +88,7 @@ export class UserProfileView {
         // 创建内容区域容器（类似学习页面的learning-options）
         const contentArea = contentWrapper.createDiv({ cls: 'profile-content-area' });
 
-        // 在内容区域中渲染各个卡片组件
-        this.renderBasicInfo(contentArea);
-        this.renderAchievements(contentArea);
+        // 在内容区域中仅渲染保留的两个卡片组件
         this.renderStatsOverview(contentArea);
         this.renderManagementCenter(contentArea);
 
@@ -108,18 +104,6 @@ export class UserProfileView {
         container.createEl('p', { text: '个人信息以及学习生涯', cls: 'page-subtitle' });
     }
 
-    private renderBasicInfo(container: HTMLElement): void {
-        const cardContainer = container.createDiv({ cls: 'profile-card-container' });
-        const basicInfoCard = new BasicInfoCard(cardContainer, this.app, this.userProfile);
-        this.components.push(basicInfoCard);
-    }
-
-    private renderAchievements(container: HTMLElement): void {
-        const cardContainer = container.createDiv({ cls: 'profile-card-container' });
-        const achievementCard = new AchievementCard(cardContainer, this.userProfile.achievements);
-        this.components.push(achievementCard);
-    }
-
     private renderStatsOverview(container: HTMLElement): void {
         const cardContainer = container.createDiv({ cls: 'profile-card-container' });
         // 传递统计数据到 StatsOverviewCard 构造函数
@@ -133,69 +117,47 @@ export class UserProfileView {
         this.components.push(managementCenter);
     }
 
-    // 更新用户基本信息
+    // 更新用户基本信息（当前无个人信息卡片，仅更新内存并记录日志）
     public updateUserInfo(newInfo: Partial<UserProfile>): void {
         Object.assign(this.userProfile, newInfo);
-
-        // 更新基本信息卡片
-        const basicInfoComponent = this.components[0];
-        if (basicInfoComponent && basicInfoComponent.updateUserInfo) {
-            basicInfoComponent.updateUserInfo(this.userProfile);
-        }
-
-        console.log('用户信息已更新', newInfo);
+        console.log('用户信息已更新(无UI渲染)', newInfo);
     }
 
     // 更新统计数据
     public updateStats(newStats: any[]): void {
         this.userProfile.stats = newStats;
 
-        // 更新统计卡片
-        const statsComponent = this.components[2];
-        if (statsComponent && statsComponent.updateStats) {
+        // 在已渲染组件中查找 StatsOverviewCard 实例或具有 updateStats 方法的组件
+        const statsComponent = this.components.find(c => typeof c?.updateStats === 'function');
+        if (statsComponent) {
             statsComponent.updateStats(newStats);
         }
 
         console.log('统计数据已更新', { statsCount: newStats.length });
     }
 
-    // 更新勋章信息
+    // 更新勋章信息（已移除勋章墙卡片，方法保留为无副作用以兼容）
     public updateAchievements(newAchievements: any[]): void {
         this.userProfile.achievements = newAchievements;
-
-        // 更新勋章卡片
-        const achievementComponent = this.components[1];
-        if (achievementComponent && achievementComponent.updateAchievements) {
-            achievementComponent.updateAchievements(newAchievements);
-        }
-
-        console.log('勋章信息已更新', { achievementsCount: newAchievements.length });
+        console.log('勋章信息更新(无UI渲染)', { achievementsCount: newAchievements?.length || 0 });
     }
 
-    // 添加新勋章
+    // 添加新勋章（已移除勋章墙卡片，仅提示并记录日志）
     public addAchievement(achievement: any): void {
         if (!this.userProfile.achievements) {
             this.userProfile.achievements = [];
         }
-
         this.userProfile.achievements.push(achievement);
-
-        const achievementComponent = this.components[1];
-        if (achievementComponent && achievementComponent.addAchievement) {
-            achievementComponent.addAchievement(achievement);
-        }
-
-        new Notice(`恭喜获得新勋章：${achievement.name}！`);
-        console.log('新勋章已添加', achievement);
+        new Notice(`获得勋章：${achievement.name}`);
+        console.log('新勋章已添加(无UI渲染)', achievement);
     }
 
     // 更新单个统计数据
     public updateSingleStat(statId: string, updates: any): void {
-        const statsComponent = this.components[2];
-        if (statsComponent && statsComponent.updateSingleStat) {
+        const statsComponent = this.components.find(c => typeof c?.updateSingleStat === 'function');
+        if (statsComponent) {
             statsComponent.updateSingleStat(statId, updates);
         }
-
         console.log('单个统计数据已更新', { statId, updates });
     }
 

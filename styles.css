@@ -4637,6 +4637,23 @@ button.mod-cta:hover {
     color: var(--text-normal);
     font-size: 14px;
     transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+/* 修复部分平台下 select 中文文本被裁剪的问题：
+   通过增大内边距与行高，并保证最小高度，避免字体下沿被遮挡 */
+.form-select {
+    /* 在部分系统/字体下, UA 对 select 的行高处理与盒模型不一致，
+       通过显式高度确保空间，并关闭原生外观避免渲染裁剪 */
+    height: 40px;
+    min-height: 40px;
+    line-height: normal;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-family: inherit;
 }
 
 .form-select:focus,
@@ -4690,6 +4707,14 @@ button.mod-cta:hover {
 .about-header {
     text-align: center;
     margin-bottom: 32px;
+    position: relative; /* 使关闭按钮可绝对定位在右上角 */
+}
+
+/* 关于我们弹窗统一右上角关闭按钮位置 */
+.about-header .modal-close-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
 }
 
 .logo-section {
