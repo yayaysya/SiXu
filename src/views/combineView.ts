@@ -1232,8 +1232,8 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染考试导航按钮
 	 */
-	private renderExamNavigation(container: HTMLElement): void {
-		const navEl = container.createDiv({ cls: 'exam-navigation' });
+    private renderExamNavigation(container: HTMLElement): void {
+        const navEl = container.createDiv({ cls: 'exam-navigation' });
 
 		// 上一题按钮
 		const prevBtn = navEl.createEl('button', {
@@ -1256,26 +1256,49 @@ export class CombineNotesView extends ItemView {
 		indicatorEl.setText(`${this.currentQuestionIndex + 1} / ${this.currentQuestions.length}`);
 
 		// 下一题/提交答卷按钮
-		const isLastQuestion = this.currentQuestionIndex === this.currentQuestions.length - 1;
-		const nextBtn = navEl.createEl('button', {
-			text: isLastQuestion ? '提交答卷' : '下一题',
-			cls: isLastQuestion ? 'exam-nav-button mod-cta' : 'exam-nav-button'
-		});
+        const isLastQuestion = this.currentQuestionIndex === this.currentQuestions.length - 1;
+        const nextBtn = navEl.createEl('button', {
+            text: isLastQuestion ? '提交答卷' : '下一题',
+            cls: isLastQuestion ? 'exam-nav-button mod-cta' : 'exam-nav-button'
+        });
 
 		nextBtn.addEventListener('click', () => {
-			if (isLastQuestion) {
-				// 提交答卷
-				this.submitExam();
-			} else {
-				// 保存当前题目的答案状态
-				this.saveCurrentQuestionAnswer();
-				// 下一题
-				this.currentQuestionIndex++;
-				// 只重新渲染考试界面
-				this.renderExamViewOnly();
-			}
-		});
-	}
+            if (isLastQuestion) {
+                // 提交答卷
+                this.submitExam();
+            } else {
+                // 保存当前题目的答案状态
+                this.saveCurrentQuestionAnswer();
+                // 下一题
+                this.currentQuestionIndex++;
+                // 只重新渲染考试界面
+                this.renderExamViewOnly();
+            }
+        });
+
+        // 在导航渲染后渲染“提前结束”按钮（非最后一题显示）
+        this.renderEarlyEndExamButton(container);
+    }
+
+    /**
+     * 渲染“提前结束考试”按钮（固定在底部 dock 上方），最后一题不显示
+     */
+    private renderEarlyEndExamButton(container: HTMLElement): void {
+        // 清除旧的按钮（避免重复）
+        const oldBtn = this.containerEl.querySelector('.exam-early-end-btn');
+        if (oldBtn) oldBtn.remove();
+
+        const isLast = this.currentQuestionIndex === this.currentQuestions.length - 1;
+        if (isLast) return;
+
+        const btn = container.createEl('button', { cls: 'exam-early-end-btn', text: '提前结束' });
+        btn.addEventListener('click', async () => {
+            const confirmed = await this.showConfirmDialog('确定提前结束本次测试吗？未答题目将按未答计入。');
+            if (!confirmed) return;
+            // 强制提交，跳过未答二次确认
+            await this.submitExam(true);
+        });
+    }
 
 	/**
 	 * 保存当前题目的答案状态
@@ -1344,16 +1367,16 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 提交答卷
 	 */
-	private async submitExam(): Promise<void> {
-		// 检查是否所有题目都已回答
-		const unanswered = this.currentQuestions.filter(q => !this.userAnswers.has(q.id));
+    private async submitExam(force: boolean = false): Promise<void> {
+        // 检查是否所有题目都已回答
+        const unanswered = this.currentQuestions.filter(q => !this.userAnswers.has(q.id));
 
-		if (unanswered.length > 0) {
-			const confirm = await this.showConfirmDialog(
-				`还有 ${unanswered.length} 题未作答，确定提交吗？`
-			);
-			if (!confirm) return;
-		}
+        if (!force && unanswered.length > 0) {
+            const confirm = await this.showConfirmDialog(
+                `还有 ${unanswered.length} 题未作答，确定提交吗？`
+            );
+            if (!confirm) return;
+        }
 
 		if (!this.currentQuizFile || !this.currentQuizData) {
 			new Notice('考试数据错误');
@@ -1439,15 +1462,46 @@ export class CombineNotesView extends ItemView {
 		}
 	}
 
-	/**
-	 * 显示确认对话框
-	 */
-	private showConfirmDialog(message: string): Promise<boolean> {
-		return new Promise((resolve) => {
-			const confirmed = confirm(message);
-			resolve(confirmed);
-		});
-	}
+    /**
+     * 显示统一样式的确认对话框
+     */
+    private showConfirmDialog(message: string, title: string = '确认操作', confirmText: string = '确认', cancelText: string = '取消'): Promise<boolean> {
+        return new Promise((resolve) => {
+            const { Modal, setIcon } = require('obsidian');
+
+            class ConfirmModal extends Modal {
+                constructor(app: App, private msg: string) { super(app); }
+                onOpen() {
+                    this.modalEl.addClass('exam-confirm-modal');
+                    this.modalEl.addClass('profile-modal');
+                    const container = this.modalEl.createDiv({ cls: 'help-modal-container' });
+
+                    // 头部
+                    const header = container.createDiv({ cls: 'modal-header' });
+                    const titleSection = header.createDiv({ cls: 'header-title-section' });
+                    const icon = titleSection.createDiv({ cls: 'header-icon' });
+                    setIcon(icon, 'alert-triangle');
+                    titleSection.createDiv({ cls: 'header-title' }).setText(title);
+                    const closeBtn = header.createDiv({ cls: 'modal-close-btn' });
+                    setIcon(closeBtn, 'x');
+                    closeBtn.onClickEvent(() => { this.close(); resolve(false); });
+
+                    // 内容
+                    const msgEl = container.createDiv({ cls: 'exam-confirm-message' });
+                    msgEl.setText(this.msg);
+
+                    // 按钮
+                    const actions = container.createDiv({ cls: 'exam-confirm-actions' });
+                    const cancelBtn = actions.createEl('button', { text: cancelText });
+                    cancelBtn.addEventListener('click', () => { this.close(); resolve(false); });
+                    const okBtn = actions.createEl('button', { text: confirmText, cls: 'mod-cta' });
+                    okBtn.addEventListener('click', () => { this.close(); resolve(true); });
+                }
+            }
+
+            new ConfirmModal(this.app, message).open();
+        });
+    }
 
 	/**
 	 * 渲染结果视图
@@ -1489,18 +1543,18 @@ export class CombineNotesView extends ItemView {
 		const titleEl = cardEl.createDiv({ cls: 'result-title' });
 		titleEl.setText(this.currentQuizData?.metadata.title || '测验结果');
 
-		// 大分数显示
-		const scoreEl = cardEl.createDiv({ cls: 'result-score-display' });
+        // 大分数显示（百分制，取整数）
+        const scoreEl = cardEl.createDiv({ cls: 'result-score-display' });
         const scoreNum = scoreEl.createDiv({ cls: 'result-score-number' });
-        scoreNum.setText(formatNumber(totalScore));
+        const percentInt = Math.max(0, Math.min(100, Math.floor(parseFloat(percentage))));
+        scoreNum.setText(String(percentInt));
 
-		const scoreMeta = scoreEl.createDiv({ cls: 'result-score-meta' });
-		scoreMeta.createSpan({ text: `/ ${maxScore}`, cls: 'result-score-max' });
-		scoreMeta.createSpan({ text: `(${percentage}%)`, cls: 'result-score-percentage' });
+        const scoreUnit = scoreEl.createDiv({ cls: 'result-score-unit' });
+        scoreUnit.setText('分');
 
 		// 等级评价
 		const gradeEl = cardEl.createDiv({ cls: 'result-grade' });
-		const grade = this.getGrade(parseFloat(percentage));
+        const grade = this.getGrade(percentInt);
 		gradeEl.setText(grade);
 		gradeEl.addClass(`grade-${grade.toLowerCase()}`);
 	}
@@ -1604,8 +1658,8 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染结果页底部按钮
 	 */
-	private renderResultActions(container: HTMLElement): void {
-		const actionsEl = container.createDiv({ cls: 'result-actions' });
+    private renderResultActions(container: HTMLElement): void {
+        const actionsEl = container.createDiv({ cls: 'result-actions' });
 
 		const backBtn = actionsEl.createEl('button', { text: '返回列表' });
 		backBtn.addEventListener('click', () => {
@@ -1614,13 +1668,22 @@ export class CombineNotesView extends ItemView {
 			this.render();
 		});
 
-		const viewFileBtn = actionsEl.createEl('button', { text: '查看详细报告', cls: 'mod-cta' });
-		viewFileBtn.addEventListener('click', () => {
-			if (this.currentResultFile) {
-				this.openFile(this.currentResultFile.path);
-			}
-		});
-	}
+        const viewFileBtn = actionsEl.createEl('button', { text: '查看详细报告', cls: 'mod-cta' });
+        viewFileBtn.addEventListener('click', () => {
+            if (this.currentResultFile) {
+                this.openFile(this.currentResultFile.path);
+            }
+        });
+
+        // 第二行：再考一次（样式与“查看详细报告”一致，独占一行）
+        const retakeRow = container.createDiv({ cls: 'result-actions' });
+        const retakeBtn = retakeRow.createEl('button', { text: '再考一次', cls: 'mod-cta' });
+        retakeBtn.addEventListener('click', async () => {
+            if (!this.currentQuizFile) return;
+            // 重新开始同一份试卷：回到第1题并进入考试视图
+            await this.startQuiz(this.currentQuizFile);
+        });
+    }
 
 	/**
 	 * 格式化答案显示

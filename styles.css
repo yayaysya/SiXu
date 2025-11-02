@@ -741,6 +741,69 @@ button.mod-cta:hover {
     min-width: 60px;
 }
 
+/* 提前结束按钮（固定在底部 dock 上方） */
+.exam-early-end-btn {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px)); /* 上移，留出与 dock 的间距 */
+    z-index: 90;
+    width: calc(100% - 24px);
+    max-width: 560px;
+    padding: 10px 16px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px; /* 与其他框体统一的矩形圆角 */
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.exam-early-end-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+@media (max-width: 400px) {
+    .exam-early-end-btn { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); padding: 10px 14px; }
+}
+
+/* 统一风格的考试确认弹窗 */
+.exam-confirm-modal .exam-confirm-message {
+    font-size: 14px;
+    color: var(--text-normal);
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.exam-confirm-actions {
+    margin-top: 16px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.exam-confirm-actions button {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+}
+
+.exam-confirm-actions button.mod-cta {
+    border: none;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.exam-confirm-actions button.mod-cta:hover {
+    background: var(--interactive-accent-hover);
+}
+
 /* ===== 结果视图样式 ===== */
 
 /* 结果容器 */
@@ -788,6 +851,13 @@ button.mod-cta:hover {
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
+}
+
+/* 百分制“分”单位样式 */
+.result-score-unit {
+    font-size: 1.2em;
+    font-weight: 600;
+    opacity: 0.95;
 }
 
 .result-score-max {
@@ -2649,9 +2719,13 @@ button.mod-cta:hover {
 	position: relative;
 	width: 100%;
 	max-width: 600px;
-	min-height: 400px;
+	/* 让学习卡片在可用空间内垂直居中，适配不同屏幕高度 */
+	min-height: max(400px, calc(100vh - 240px));
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	margin: 0 auto 20px;
-	padding: 0 16px;
+	padding: 0 16px 24px; /* 给底部评分按钮留出空间 */
 }
 
 /* 3D卡片包装器 */
