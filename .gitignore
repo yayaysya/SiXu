@@ -24,3 +24,10 @@ bug/
 # 成果物
 *.zip
 .serena/
+# Spec workflow
+.spec-workflow/
+
+# AI 生成的文档
+CLAUDE.md
+*/CLAUDE.md
+.claude/

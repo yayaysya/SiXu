@@ -119,6 +119,8 @@ export function getProviderDisplayName(provider: AIProvider): string {
 			return 'DeepSeek';
 		case AIProvider.GEMINI:
 			return 'Google Gemini';
+		case AIProvider.CUSTOM:
+			return '自定义';
 		default:
 			return provider;
 	}

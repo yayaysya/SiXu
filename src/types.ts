@@ -5,7 +5,8 @@ export enum AIProvider {
 	ZHIPU = 'zhipu',
 	OPENAI = 'openai',
 	DEEPSEEK = 'deepseek',
-	GEMINI = 'gemini'
+	GEMINI = 'gemini',
+	CUSTOM = 'custom'
 }
 
 /**
@@ -14,6 +15,7 @@ export enum AIProvider {
 export interface ProviderSettings {
 	apiKey: string;
 	baseUrl: string;
+	cachedModels?: string[];
 }
 
 /**
@@ -35,12 +37,14 @@ export interface NotebookLLMSettings {
 			[AIProvider.OPENAI]: ProviderSettings;
 			[AIProvider.DEEPSEEK]: ProviderSettings;
 			[AIProvider.GEMINI]: ProviderSettings;
+			[AIProvider.CUSTOM]: ProviderSettings;
 		};
 		vision: {
 			[AIProvider.ZHIPU]: ProviderSettings;
 			[AIProvider.OPENAI]: ProviderSettings;
 			[AIProvider.DEEPSEEK]?: ProviderSettings; // DeepSeek 不支持视觉，但允许存储以兼容旧配置
 			[AIProvider.GEMINI]: ProviderSettings;
+			[AIProvider.CUSTOM]: ProviderSettings;
 		};
 	};
 
@@ -100,6 +104,11 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 			[AIProvider.GEMINI]: {
 				apiKey: '',
 				baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai'
+			},
+			[AIProvider.CUSTOM]: {
+				apiKey: '',
+				baseUrl: '',
+				cachedModels: []
 			}
 		},
 		vision: {
@@ -114,6 +123,10 @@ export const DEFAULT_SETTINGS: NotebookLLMSettings = {
 			[AIProvider.GEMINI]: {
 				apiKey: '',
 				baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai'
+			},
+			[AIProvider.CUSTOM]: {
+				apiKey: '',
+				baseUrl: ''
 			}
 		}
 	},

@@ -1,5 +1,5 @@
 import { App, Plugin, TFile, Notice, MarkdownView, WorkspaceLeaf } from 'obsidian';
-import { NotebookLLMSettings, DEFAULT_SETTINGS, TaskStatus, ImageInfo, LinkInfo } from './types';
+import { NotebookLLMSettings, DEFAULT_SETTINGS, TaskStatus, ImageInfo, LinkInfo, AIProvider } from './types';
 import { NotebookLLMSettingTab } from './settings';
 import { createTextProvider, createVisionProvider } from './api/factory';
 import { DebugMarkdownLogger } from './utils/DebugMarkdown';
@@ -150,6 +150,12 @@ export default class NotebookLLMPlugin extends Plugin {
 				await this.saveSettings();
 				console.log('配置迁移完成');
 			}
+		}
+
+		// 确保自定义服务商持久化属性存在
+		const customTextProvider = this.settings.providers.text[AIProvider.CUSTOM];
+		if (customTextProvider && !customTextProvider.cachedModels) {
+			customTextProvider.cachedModels = [];
 		}
 	}
 

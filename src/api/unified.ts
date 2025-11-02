@@ -1,3 +1,4 @@
+import { requestUrl } from 'obsidian';
 import { AIProvider } from '../types';
 
 // 调试回调（由 DebugMarkdownLogger 间接提供）
@@ -16,8 +17,29 @@ export class UnifiedAIProvider {
     constructor(provider: AIProvider, apiKey: string, baseUrl: string, debugAppend?: DebugAppendFn) {
 		this.provider = provider;
 		this.apiKey = apiKey;
-		this.baseUrl = baseUrl;
+		const normalizedUrl = this.normalizeBaseUrl(baseUrl);
+		this.baseUrl = normalizedUrl || this.getDefaultBaseUrl(provider);
         this.debugAppend = debugAppend;
+	}
+
+	/**
+	 * 获取各厂商的默认基础URL
+	 */
+	private getDefaultBaseUrl(provider: AIProvider): string {
+		switch (provider) {
+			case AIProvider.ZHIPU:
+				return 'https://open.bigmodel.cn/api/paas/v4';
+			case AIProvider.OPENAI:
+				return 'https://api.openai.com/v1';
+			case AIProvider.DEEPSEEK:
+				return 'https://api.deepseek.com/v1';
+			case AIProvider.GEMINI:
+				return 'https://generativelanguage.googleapis.com/v1beta';
+			case AIProvider.CUSTOM:
+				return ''; // 自定义服务商没有默认URL
+			default:
+				return '';
+		}
 	}
 
 	/**
@@ -50,7 +72,8 @@ export class UnifiedAIProvider {
                 });
             } catch {}
 
-			const response = await fetch(url, {
+			const response = await requestUrl({
+				url,
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -59,29 +82,26 @@ export class UnifiedAIProvider {
 				body: JSON.stringify(config)
 			});
 
-			if (!response.ok) {
-                // 优先 text，再尝试 JSON，便于保留更多错误信息
-				const raw = await response.text().catch(() => '');
-                let errMsg = response.statusText;
+			if (response.status < 200 || response.status >= 300) {
+				const rawText = response.text ?? '';
+				let parsed: any = response.json;
+				if (!parsed && rawText) {
+					try { parsed = JSON.parse(rawText); } catch { /* ignore */ }
+				}
+				let errMsg = parsed?.error?.message || rawText || `HTTP ${response.status}`;
 				let retryMs: number | null = null;
-				if (raw) {
-                    try {
-                        const obj = JSON.parse(raw);
-                        errMsg = obj?.error?.message || raw;
-						// 解析 Gemini 的 RetryInfo（"retryDelay": "26s"）
-						const m = raw.match(/"retryDelay"\s*:\s*"(\d+)s"/);
-						if (m && m[1]) retryMs = parseInt(m[1], 10) * 1000;
-                    } catch {
-                        errMsg = raw;
-                    }
-                }
-				// 头部 Retry-After（秒）
-				const ra = response.headers.get('retry-after');
-				if (!retryMs && ra && /^\d+$/.test(ra)) retryMs = parseInt(ra, 10) * 1000;
+				if (rawText) {
+					const m = rawText.match(/"retryDelay"\s*:\s*"(\d+)s"/);
+					if (m && m[1]) retryMs = parseInt(m[1], 10) * 1000;
+				}
+				const headers = response.headers || {};
+				const retryAfterHeader = headers['retry-after'] || headers['Retry-After'];
+				if (!retryMs && typeof retryAfterHeader === 'string' && /^\d+$/.test(retryAfterHeader)) {
+					retryMs = parseInt(retryAfterHeader, 10) * 1000;
+				}
 
-				// 针对 429 做一次等待重试
 				if (response.status === 429 && attempt < MAX_RETRIES) {
-					const wait = retryMs ?? 26000; // 默认 26s
+					const wait = retryMs ?? 26000;
 					try {
 						this.debugAppend?.('429 限流重试', {
 							provider: this.provider,
@@ -92,13 +112,17 @@ export class UnifiedAIProvider {
 					} catch {}
 					await this.sleep(wait);
 					attempt++;
-					continue; // 重试
+					continue;
 				}
-                throw new Error(`API请求失败 (${response.status}): ${errMsg}`);
+				throw new Error(`API请求失败 (${response.status}): ${errMsg}`);
 			}
-
-			const data = await response.json();
-            try {
+			let data = response.json;
+			if (!data && response.text) {
+				try { data = JSON.parse(response.text); } catch {
+					throw new Error('API返回了无法解析的响应');
+				}
+			}
+			try {
                 const content = data?.choices?.[0]?.message?.content;
                 if (content) {
                     this.debugAppend?.('AI 返回', {
@@ -216,24 +240,25 @@ export class UnifiedAIProvider {
 			const MAX_RETRIES = 1;
 			let attempt = 0;
 			while (true) {
-				const res = await fetch(endpoint, {
+				const res = await requestUrl({
+					url: endpoint,
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(body)
 				});
-				if (!res.ok) {
-					const raw = await res.text().catch(() => '');
-					let errMsg = res.statusText;
+				if (res.status < 200 || res.status >= 300) {
+					const raw = res.text ?? '';
+					let errMsg = res.json?.error?.message || raw || `HTTP ${res.status}`;
 					let retryMs: number | null = null;
 					if (raw) {
 						try {
 							const obj = JSON.parse(raw);
-							errMsg = obj?.error?.message || raw;
+							errMsg = obj?.error?.message || errMsg;
 							const rm = raw.match(/"retryDelay"\s*:\s*"(\d+)s"/);
 							if (rm && rm[1]) retryMs = parseInt(rm[1], 10) * 1000;
 						} catch { errMsg = raw; }
 					}
-					const ra = res.headers.get('retry-after');
+					const ra = res.headers?.['retry-after'] || res.headers?.['Retry-After'];
 					if (!retryMs && ra && /^\d+$/.test(ra)) retryMs = parseInt(ra, 10) * 1000;
 					if (res.status === 429 && attempt < MAX_RETRIES) {
 						const wait = retryMs ?? 26000;
@@ -244,7 +269,12 @@ export class UnifiedAIProvider {
 					}
 					throw new Error(`Gemini 原生接口失败 (${res.status}): ${errMsg}`);
 				}
-				const data = await res.json();
+				let data = res.json;
+				if (!data && res.text) {
+					try { data = JSON.parse(res.text); } catch {
+						throw new Error('Gemini 原生接口返回无法解析的响应');
+					}
+				}
 				try { this.debugAppend?.('Gemini 原生图片-返回', { model: useModel, hasCandidates: !!data?.candidates?.length }); } catch {}
 				const text = (data?.candidates?.[0]?.content?.parts || [])
 					.map((p: any) => p?.text)
@@ -282,13 +312,16 @@ export class UnifiedAIProvider {
      * 将远程图片下载为 data:URL（用于 Gemini 兜底）
      */
     private async fetchImageAsDataUrl(url: string): Promise<string> {
-        const res = await fetch(url);
-        if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            throw new Error(`获取图片失败(${res.status}): ${text || res.statusText}`);
+        const res = await requestUrl({ url });
+        if (res.status < 200 || res.status >= 300) {
+            const text = res.text ?? '';
+            throw new Error(`获取图片失败(${res.status}): ${text || '未知错误'}`);
         }
-        const buf = await res.arrayBuffer();
-        let mime = res.headers.get('content-type') || '';
+        const buf = res.arrayBuffer;
+        if (!buf) {
+            throw new Error('图片响应为空');
+        }
+        let mime = res.headers?.['content-type'] || res.headers?.['Content-Type'] || '';
         if (!mime) {
             // 简单根据扩展名判断
             const lower = url.toLowerCase();
@@ -301,6 +334,40 @@ export class UnifiedAIProvider {
         const base64 = this.arrayBufferToBase64(buf);
         return `data:${mime};base64,${base64}`;
     }
+
+	private normalizeBaseUrl(baseUrl: string): string {
+		if (!baseUrl) return '';
+
+		let url = baseUrl.trim();
+		if (!url) return '';
+
+		url = url.split('?')[0].split('#')[0];
+		url = url.replace(/\/+$/, '');
+
+		const patterns = [
+			/\/chat\/completions$/i,
+			/\/completions$/i,
+			/\/v1\/chat\/completions$/i,
+			/\/v1\/completions$/i,
+			/\/chat$/i
+		];
+
+		for (const pattern of patterns) {
+			if (pattern.test(url)) {
+				url = url.replace(pattern, '');
+			}
+		}
+
+		const normalizedUrl = url.replace(/\/+$/, '');
+
+		// 如果处理后的URL为空，返回空字符串（调用方会使用默认值）
+		if (!normalizedUrl) {
+			console.warn('normalizeBaseUrl: 处理后的URL为空，原始URL:', baseUrl);
+			return '';
+		}
+
+		return normalizedUrl;
+	}
 
     private arrayBufferToBase64(buffer: ArrayBuffer): string {
         const bytes = new Uint8Array(buffer);
