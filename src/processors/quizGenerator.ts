@@ -271,24 +271,28 @@ ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截
 		const quizDir = this.plugin.settings.quizDir;
 		await this.ensureDirectory(quizDir);
 
-		// 生成唯一文件名（包含时间戳和序号）
-		const now = new Date();
-		const dateStr = now.toISOString().split('T')[0];  // 2025-10-26
-		const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');  // 14-30-45
+		// 生成简略文件名：{简略标题}_flash(.md)
+		const sanitizeTitle = (name: string): string => {
+			// 移除不安全字符（Windows/Unix非法）
+			let n = name.replace(/[\\/:*?"<>|]/g, '').trim();
+			// 用空格/下划线/连字符统一为无分隔或单个连字符
+			n = n.replace(/\s+/g, ' ').replace(/[\s_]+/g, '-');
+			// 过长则截断
+			if (n.length > 12) n = n.slice(0, 12);
+			if (!n) n = 'quiz';
+			return n;
+		};
 
-		let fileName = '';
-		let filePath = '';
-		let sequenceNum = 1;
+		const short = sanitizeTitle(sourceFile.basename);
+		const base = `${short}_flash`;
+		let fileName = `${base}.md`;
+		let filePath = `${quizDir}/${fileName}`;
+		let sequenceNum = 2;
 
-		// 检查文件是否已存在，如果存在则增加序号
-		while (true) {
-			fileName = `${sourceFile.basename}_Quiz_${dateStr}_${timeStr}_${sequenceNum}.md`;
+		// 已存在则追加序号，保持简短
+		while (await this.app.vault.adapter.exists(filePath)) {
+			fileName = `${base}_${sequenceNum}.md`;
 			filePath = `${quizDir}/${fileName}`;
-
-			const exists = await this.app.vault.adapter.exists(filePath);
-			if (!exists) {
-				break;
-			}
 			sequenceNum++;
 		}
 

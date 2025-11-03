@@ -447,6 +447,32 @@ class CreateDeckModal extends Modal {
 		});
 		nameInput.style.width = '100%';
 
+		// 名称自动生成与用户编辑状态
+		let lastAutoName: string | null = null;
+		let nameManuallyEdited = false;
+
+		const simplifyDeckName = (raw: string): string => {
+			const base = (raw || '').toString();
+			let cleaned = base
+				.replace(/[\[\]{}（）()<>【】]/g, ' ') // 去掉括号符号
+				.replace(/[\t\r\n]+/g, ' ') // 换行制表
+				.replace(/[\|·•—–\-_/\\]+/g, ' ') // 分隔符归一
+				.replace(/\s+/g, ' ') // 空白压缩
+				.trim();
+			if (!cleaned) return '新建卡组';
+			const limit = 20; // 最长展示长度
+			if (cleaned.length > limit) {
+				cleaned = cleaned.slice(0, limit - 1) + '…';
+			}
+			return cleaned;
+		};
+
+		// 监听名称输入，识别用户是否手动编辑
+		nameInput.addEventListener('input', () => {
+			const val = nameInput.value;
+			nameManuallyEdited = !!val.trim() && val !== lastAutoName;
+		});
+
 		// 选择笔记
 		const noteGroup = contentEl.createDiv({ cls: 'setting-item' });
 		noteGroup.createDiv({ text: '来源笔记', cls: 'setting-item-name' });
@@ -456,9 +482,18 @@ class CreateDeckModal extends Modal {
 		});
 		noteInput.style.width = '100%';
 
+		let initialPath: string | null = null;
 		const currentFile = this.app.workspace.getActiveFile();
 		if (currentFile) {
 			noteInput.value = currentFile.path;
+			// 默认名称：基于当前笔记名的简化
+			lastAutoName = simplifyDeckName(currentFile.basename);
+			nameInput.value = lastAutoName; // 默认名称填入简化后的笔记名
+			initialPath = currentFile.path;
+		} else {
+			// 无当前笔记时提供通用默认名
+			lastAutoName = '新建卡组';
+			nameInput.value = lastAutoName;
 		}
 
 		const selectBtn = noteGroup.createEl('button', { text: '选择笔记' });
@@ -466,6 +501,14 @@ class CreateDeckModal extends Modal {
 			const file = await this.selectNoteFile();
 			if (file) {
 				noteInput.value = file.path;
+				// 若用户未手动编辑或当前名称仍为上一次自动值，则根据新笔记名生成默认
+				const autoName = simplifyDeckName(file.basename);
+				if (!nameManuallyEdited || nameInput.value === (lastAutoName || '')) {
+					nameInput.value = autoName;
+					lastAutoName = autoName;
+				}
+				// 立即根据选择的笔记推荐卡片数量
+				void suggestCountFromPath(file.path);
 			}
 		});
 
@@ -479,6 +522,64 @@ class CreateDeckModal extends Modal {
 		countInput.min = '5';
 		countInput.max = '30';
 		countInput.style.width = '100%';
+
+			// 基于文本字符数自动推荐卡片数量（范围5-30）
+			const estimateRecommendedCount = (content: string): number => {
+				const cleaned = content
+					.replace(/```[\s\S]*?```/g, '') // 代码块
+					.replace(/`[^`]*`/g, '') // 行内代码
+					.replace(/!\[[^\]]*\]\([^)]*\)/g, '') // 图片
+					.replace(/\[[^\]]*\]\([^)]*\)/g, '') // 链接
+					.replace(/[#>*_\-]/g, ' ') // 简化标记
+					.replace(/\s+/g, ' ')
+					.trim();
+				const len = cleaned.length;
+				let rec = Math.round(len / 200); // 约每200字符1张
+				if (!rec || rec < 5) rec = 5;
+				if (rec > 30) rec = 30;
+				return rec;
+			};
+
+		const suggestCountFromPath = async (path: string) => {
+			const f = this.app.vault.getAbstractFileByPath(path);
+			if (f instanceof TFile) {
+				try {
+					const txt = await this.app.vault.read(f);
+					countInput.value = String(estimateRecommendedCount(txt));
+				} catch {}
+			}
+		};
+
+		// 当来源笔记变更时：自动推荐数量，并在未手动编辑名称时自动更新默认名称
+		noteInput.addEventListener('change', () => {
+			const p = noteInput.value.trim();
+			if (p) void suggestCountFromPath(p);
+			const f = this.app.vault.getAbstractFileByPath(p);
+			if (f instanceof TFile) {
+				const autoName = simplifyDeckName(f.basename);
+				if (!nameManuallyEdited || nameInput.value === (lastAutoName || '')) {
+					nameInput.value = autoName;
+					lastAutoName = autoName;
+				}
+			}
+		});
+		noteInput.addEventListener('blur', () => {
+			const p = noteInput.value.trim();
+			if (p) void suggestCountFromPath(p);
+			const f = this.app.vault.getAbstractFileByPath(p);
+			if (f instanceof TFile) {
+				const autoName = simplifyDeckName(f.basename);
+				if (!nameManuallyEdited || nameInput.value === (lastAutoName || '')) {
+					nameInput.value = autoName;
+					lastAutoName = autoName;
+				}
+			}
+		});
+
+		// 打开时如有默认笔记则自动推荐
+		if (initialPath) {
+			void suggestCountFromPath(initialPath);
+		}
 
 		// 按钮
 		const buttonGroup = contentEl.createDiv({ cls: 'modal-button-container' });
