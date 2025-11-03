@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, TFile, Notice, EventRef, Modal, App, setIcon } from 'obsidian';
+import { ItemView, WorkspaceLeaf, TFile, Notice, EventRef, Modal, App, setIcon, MarkdownRenderer, Component } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { CombineNoteItem, QuizQuestion, QuizQuestionResult, QuizData } from '../types';
 import { StatisticsManager } from '../utils/statistics';
@@ -4282,8 +4282,8 @@ export class CombineNotesView extends ItemView {
 				sectionContent = '未找到匹配的章节内容';
 			}
 
-			// 显示悬浮窗
-			new SourcePopoverModal(this.app, file.basename, sourceSection, sectionContent, () => {
+			// 显示悬浮窗（传入 sourcePath 以便 Markdown 渲染解析相对链接/资源）
+			new SourcePopoverModal(this.app, file.basename, file.path, sourceSection, sectionContent, () => {
 				// 跳转到原文
 				this.app.workspace.getLeaf().openFile(file);
 			}).open();
@@ -4401,6 +4401,9 @@ export class CombineNotesView extends ItemView {
 			this.userProfileView = new UserProfileView(container, this.app);
 			this.userProfileView.render();
 
+			// 渲染完成后异步刷新“生涯总览”真实数据
+			void this.refreshProfileStatsAsync();
+
 		} catch (error) {
 			console.error('渲染个人资料页面失败:', error);
 
@@ -4419,9 +4422,8 @@ export class CombineNotesView extends ItemView {
 		if (!this.userProfileView) return;
 
 		try {
-			// 获取统计数据
-			const stats = this.getProfileStats();
-			this.userProfileView.updateStats(stats);
+			// 兼容保留：触发异步刷新
+			void this.refreshProfileStatsAsync();
 
 			// 获取用户基本信息
 			const userInfo = this.getUserBasicInfo();
@@ -4435,53 +4437,50 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 获取个人资料统计数据
 	 */
-	private getProfileStats(): any[] {
+	private async refreshProfileStatsAsync(): Promise<void> {
 		try {
-			// 暂时使用模拟数据，后续可以集成实际的统计方法
-			const flashcardStats = {
-				totalCards: 200,
-				masteredCards: 156
-			};
+			if (!this.userProfileView) return;
 
-			// 获取Quiz统计数据 (暂时使用模拟数据)
-			const quizStats = {
-				averageAccuracy: 85.5
-			};
+			// 1) 闪卡聚合（跨卡组）
+			const statsMgr = this.statisticsManager;
+			if (!statsMgr) return;
+			const flashAgg = await statsMgr.getFlashcardAggregate();
+			const masteryProgress = flashAgg.masteryRate * 100;
+			const totalStudyHours = Math.round((flashAgg.totalStudySeconds / 3600) * 10) / 10; // 保留1位小数
 
-			// 获取组合笔记统计数据 (暂时使用模拟数据)
-			const notesStats = {
-				totalNotes: 42
-			};
+			// 2) Quiz统计
+			const quizStats = await statsMgr.getQuizStatistics();
+			const avgAccuracy = Math.round(quizStats.avgScore * 10) / 10; // 百分比已在统计中
 
-			// 计算总学习时长（模拟数据）
-			const totalStudyHours = this.calculateTotalStudyHours();
+			// 3) 组合笔记数量
+			const combinedCount = await statsMgr.getCombinedNotesCount();
 
-			return [
+			const stats = [
 				{
 					id: 'mastered_flashcards',
 					label: '掌握闪卡',
-					value: flashcardStats.masteredCards,
+					value: flashAgg.masteredCards,
 					icon: '🎯',
 					unit: '张',
-					progress: flashcardStats.totalCards > 0 ? (flashcardStats.masteredCards / flashcardStats.totalCards) * 100 : 0,
+					progress: masteryProgress,
 					color: 'blue'
 				},
 				{
 					id: 'quiz_accuracy',
 					label: 'Quiz正确率',
-					value: quizStats.averageAccuracy,
+					value: avgAccuracy,
 					icon: '📝',
 					unit: '%',
-					progress: quizStats.averageAccuracy,
+					progress: avgAccuracy,
 					color: 'green'
 				},
 				{
 					id: 'combined_notes',
 					label: '组合笔记',
-					value: notesStats.totalNotes,
+					value: combinedCount,
 					icon: '📚',
 					unit: '篇',
-					progress: Math.min((notesStats.totalNotes / 50) * 100, 100), // 假设50篇为满进度
+					progress: Math.min((combinedCount / 50) * 100, 100),
 					color: 'orange'
 				},
 				{
@@ -4490,13 +4489,14 @@ export class CombineNotesView extends ItemView {
 					label: '总学习时长',
 					icon: '⏰',
 					unit: '小时',
-					progress: Math.min((totalStudyHours / 200) * 100, 100), // 假设200小时为满进度
+					progress: Math.min((totalStudyHours / 200) * 100, 100),
 					color: 'purple'
 				}
 			];
+
+			this.userProfileView.updateStats(stats);
 		} catch (error) {
-			console.error('获取统计数据失败:', error);
-			return [];
+			console.error('刷新“生涯总览”统计失败:', error);
 		}
 	}
 
@@ -4899,6 +4899,7 @@ class FilePickerModal extends Modal {
  */
 class SourcePopoverModal extends Modal {
 	private fileName: string;
+	private sourcePath: string;
 	private sectionTitle: string;
 	private sectionContent: string;
 	private onJumpToSource: () => void;
@@ -4906,12 +4907,14 @@ class SourcePopoverModal extends Modal {
 	constructor(
 		app: App,
 		fileName: string,
+		sourcePath: string,
 		sectionTitle: string,
 		sectionContent: string,
 		onJumpToSource: () => void
 	) {
 		super(app);
 		this.fileName = fileName;
+		this.sourcePath = sourcePath;
 		this.sectionTitle = sectionTitle;
 		this.sectionContent = sectionContent;
 		this.onJumpToSource = onJumpToSource;
@@ -4934,8 +4937,12 @@ class SourcePopoverModal extends Modal {
 		const section = content.createDiv({ cls: 'source-popover-section' });
 		section.createEl('h4', { text: '相关段落' });
 
-		const sectionText = section.createEl('p');
-		sectionText.setText(this.sectionContent);
+
+		// 按 Markdown 渲染相关段落
+		const mdContainer = section.createDiv({ cls: 'markdown-rendered' });
+		mdContainer.empty();
+		const mdComponent = new Component();
+		MarkdownRenderer.render(this.app, this.sectionContent, mdContainer, this.sourcePath, mdComponent);
 
 		// 按钮区域
 		const actions = contentEl.createDiv({ cls: 'source-popover-actions' });

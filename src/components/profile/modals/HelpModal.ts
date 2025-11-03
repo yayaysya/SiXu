@@ -32,9 +32,6 @@ export class HelpModal extends Modal {
         // 常见问题
         this.renderFAQ(container);
 
-        // 反馈表单
-        this.renderFeedbackForm(container);
-
         // 底部
         this.renderFooter(container);
 
@@ -70,29 +67,29 @@ export class HelpModal extends Modal {
             {
                 title: 'QQ交流群',
                 type: 'qrcode',
-                content: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', // 占位二维码
+                content: 'http://notenote.top/qrcode_1762142781666.jpeg', // 占位二维码
                 description: '扫码加入QQ群，与开发者和其他用户交流',
                 icon: 'message-square'
             },
             {
-                title: '官方网站',
+                title: '飞书教程',
                 type: 'link',
-                content: 'https://notebook-llm.example.com',
-                description: '访问官网获取最新动态和使用教程',
+                content: 'https://uqdcpiio07.feishu.cn/wiki/TMdiwuknCiCSafk0DAgc5Ir6nqf?from=from_copylink',
+                description: '访问官网获取最新动态和使用教程   密码：linuxdo888',
                 icon: 'globe'
             },
             {
                 title: '反馈表单',
                 type: 'link',
-                content: 'https://feedback.notebook-llm.example.com',
+                content: 'https://uqdcpiio07.feishu.cn/share/base/form/shrcnNxR4XnLHCteXPFfdxvKlpb?iframeFrom=docx&ccm_open=iframe',
                 description: '提交功能建议和问题反馈',
                 icon: 'edit-3'
             },
             {
                 title: '邮箱联系',
                 type: 'email',
-                content: 'support@notebook-llm.example.com',
-                description: '通过邮件联系我们',
+                content: 'songshouli123@126.com',
+                description: '通过邮件给我反馈问题',
                 icon: 'mail'
             }
         ];
@@ -118,14 +115,18 @@ export class HelpModal extends Modal {
 
         if (info.type === 'qrcode') {
             const qrcodeEl = card.createDiv({ cls: 'contact-qrcode' });
-            const qrcodeImg = qrcodeEl.createEl('img', { attr: { src: info.content, alt: 'QR Code' } });
-            qrcodeImg.onClickEvent(() => {
+            const qrcodeImg = qrcodeEl.createEl('img', { attr: { src: info.content, alt: 'QR Code', loading: 'lazy' } });
+            qrcodeImg.onClickEvent((evt) => {
+                evt?.stopPropagation();
+                evt?.preventDefault();
                 this.showQRCode(info.title, info.content);
             });
         } else {
             const actionBtn = card.createDiv({ cls: 'contact-action-btn' });
             setIcon(actionBtn, 'external-link');
-            actionBtn.onClickEvent(() => {
+            actionBtn.onClickEvent((evt) => {
+                evt?.stopPropagation();
+                evt?.preventDefault();
                 this.handleContactAction(info);
             });
         }
@@ -255,10 +256,6 @@ export class HelpModal extends Modal {
 
         qrModal.onOpen = () => {
             const container = qrModal.modalEl.createDiv({ cls: 'qrcode-container' });
-
-            const closeBtn = container.createDiv({ cls: 'qrcode-close' });
-            setIcon(closeBtn, 'x');
-            closeBtn.onClickEvent(() => qrModal.close());
 
             const qrTitle = container.createDiv({ cls: 'qrcode-title' });
             qrTitle.setText(title);

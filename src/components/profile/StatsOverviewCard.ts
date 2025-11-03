@@ -104,6 +104,9 @@ export class StatsOverviewCard {
     }
 
     private render(): void {
+        // 重新渲染前清空容器，避免重复堆叠
+        this.container.empty();
+
         const card = this.container.createDiv({ cls: 'stats-overview-card profile-card' });
 
         const header = card.createDiv({ cls: 'card-header' });

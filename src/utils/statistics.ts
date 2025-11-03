@@ -1,6 +1,15 @@
 import { App, TFile } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { Activity, ActivityType, CalendarData, CalendarDataPoint } from '../types/activity';
+import { FlashcardStorage } from '../flashcard/FlashcardStorage';
+
+export interface FlashcardAggregate {
+    totalDecks: number;
+    totalCards: number;
+    masteredCards: number;
+    masteryRate: number; // 0-1
+    totalStudySeconds: number;
+}
 
 /**
  * Quiz统计数据
@@ -27,7 +36,7 @@ export class StatisticsManager {
 	constructor(app: App, plugin: NotebookLLMPlugin) {
 		this.app = app;
 		this.plugin = plugin;
-	}
+    }
 
 	/**
 	 * 判断是否为“组合笔记”文件
@@ -45,10 +54,48 @@ export class StatisticsManager {
 		return namePattern.test(file.basename);
 	}
 
-	/**
-	 * 获取已合并笔记的数量（跨目录识别）
-	 */
-	async getCombinedNotesCount(): Promise<number> {
+    /**
+     * 汇总闪卡聚合数据（跨卡组）
+     */
+    async getFlashcardAggregate(): Promise<FlashcardAggregate> {
+        const cacheKey = 'flashcard-aggregate';
+        const cached = this.getFromCache(cacheKey);
+        if (cached !== null) return cached as FlashcardAggregate;
+
+        const deckDir = this.plugin.settings.flashcard?.deckDir || 'flashcards';
+        const storage = new FlashcardStorage(this.app, deckDir);
+        const decks = await storage.loadAllDecks();
+
+        let totalCards = 0;
+        let masteredCards = 0;
+        let reviewPlusMastered = 0;
+        let totalStudySeconds = 0;
+
+        for (const d of decks) {
+            totalCards += d.stats.total;
+            masteredCards += d.stats.mastered;
+            reviewPlusMastered += d.stats.review + d.stats.mastered;
+            totalStudySeconds += d.stats.totalStudyTime || 0;
+        }
+
+        const masteryRate = totalCards > 0 ? reviewPlusMastered / totalCards : 0;
+
+        const agg: FlashcardAggregate = {
+            totalDecks: decks.length,
+            totalCards,
+            masteredCards,
+            masteryRate,
+            totalStudySeconds
+        };
+
+        this.setCache(cacheKey, agg);
+        return agg;
+    }
+
+    /**
+     * 获取已合并笔记的数量（跨目录识别）
+     */
+    async getCombinedNotesCount(): Promise<number> {
 		const cacheKey = 'combined-notes-count';
 		const cached = this.getFromCache(cacheKey);
 		if (cached !== null) return cached;
@@ -60,56 +107,56 @@ export class StatisticsManager {
 		return count;
 	}
 
-	/**
-	 * 获取Quiz统计数据
-	 */
-	async getQuizStatistics(): Promise<QuizStatistics> {
-		const cacheKey = 'quiz-statistics';
-		const cached = this.getFromCache(cacheKey);
-		if (cached !== null) return cached;
+    /**
+     * 获取Quiz统计数据
+     */
+    async getQuizStatistics(): Promise<QuizStatistics> {
+        const cacheKey = 'quiz-statistics';
+        const cached = this.getFromCache(cacheKey);
+        if (cached !== null) return cached as QuizStatistics;
 
-		const quizDir = this.plugin.settings.quizDir || 'quiz';
-		const files = this.app.vault.getFiles();
+        const quizDir = this.plugin.settings.quizDir || 'quiz';
+        const resultDir = this.plugin.settings.resultDir || 'quiz/results';
+        const files = this.app.vault.getFiles();
 
-		// 获取所有Quiz文件
-		const quizFiles = files.filter(file =>
-			file.path.startsWith(quizDir + '/') &&
-			file.extension === 'md' &&
-			!file.basename.includes('结果')
-		);
+        // 题目文件总数
+        const quizFiles = files.filter(file =>
+            file.path.startsWith(quizDir + '/') &&
+            file.extension === 'md' &&
+            !file.basename.includes('结果')
+        );
 
-		let completedCount = 0;
-		let totalScore = 0;
-		let scoreCount = 0;
+        // 结果文件统计（用于正确率）
+        const resultFiles = files.filter(file =>
+            file.path.startsWith(resultDir + '/') &&
+            file.extension === 'md'
+        );
 
-		// 统计每个Quiz的完成情况
-		for (const file of quizFiles) {
-			const metadata = this.app.metadataCache.getFileCache(file);
-			const frontmatter = metadata?.frontmatter;
+        let completedCount = 0;
+        let totalScore = 0;
+        let scoreCount = 0;
 
-			if (frontmatter && frontmatter.quiz_results) {
-				const results = Array.isArray(frontmatter.quiz_results)
-					? frontmatter.quiz_results
-					: [];
+        for (const rf of resultFiles) {
+            const metadata = this.app.metadataCache.getFileCache(rf);
+            const fm: any = metadata?.frontmatter || {};
+            const score = Number(fm?.score);
+            const maxScore = Number(fm?.max_score);
+            if (!isNaN(score) && !isNaN(maxScore) && maxScore > 0) {
+                completedCount++;
+                totalScore += (score / maxScore) * 100;
+                scoreCount++;
+            }
+        }
 
-				if (results.length > 0) {
-					completedCount++;
+        const stats: QuizStatistics = {
+            total: quizFiles.length,
+            completed: completedCount,
+            avgScore: scoreCount > 0 ? totalScore / scoreCount : 0
+        };
 
-					// 尝试获取最近一次的分数
-					// 这里简化处理，实际可能需要读取结果文件
-				}
-			}
-		}
-
-		const stats: QuizStatistics = {
-			total: quizFiles.length,
-			completed: completedCount,
-			avgScore: scoreCount > 0 ? totalScore / scoreCount : 0
-		};
-
-		this.setCache(cacheKey, stats);
-		return stats;
-	}
+        this.setCache(cacheKey, stats);
+        return stats;
+    }
 
 	/**
 	 * 获取最近的活动列表

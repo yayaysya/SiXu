@@ -42,9 +42,6 @@ export class AboutModal extends Modal {
         // 核心功能
         this.renderCoreFeatures(container);
 
-        // 用户评价
-        this.renderUserReviews(container);
-
         // 版本更新日志
         this.renderChangelog(container);
 
@@ -145,9 +142,6 @@ export class AboutModal extends Modal {
 
         const descEl = contentEl.createDiv({ cls: 'scenario-description' });
         descEl.setText(scenario.description);
-
-        const usersEl = card.createDiv({ cls: 'scenario-users' });
-        usersEl.setText(`${scenario.users} 用户`);
     }
 
     private renderCoreFeatures(container: HTMLElement): void {
@@ -203,70 +197,6 @@ export class AboutModal extends Modal {
 
         const descEl = contentSection.createDiv({ cls: 'feature-description' });
         descEl.setText(feature.description);
-    }
-
-    private renderUserReviews(container: HTMLElement): void {
-        const reviewsSection = container.createDiv({ cls: 'reviews-section' });
-
-        const sectionTitle = reviewsSection.createEl('h2', { text: '用户评价' });
-
-        const reviews: UserReview[] = [
-            {
-                username: '大学生小王',
-                avatar: '👨‍🎓',
-                rating: 5,
-                comment: '闪卡功能太棒了！结合SM-2算法，我的记忆效率提升了至少50%。',
-                date: '2024-10-28'
-            },
-            {
-                username: '职场人士李经理',
-                avatar: '👨‍💼',
-                rating: 5,
-                comment: 'AI整理功能节省了我大量时间，会议纪要秒变规范文档。',
-                date: '2024-10-25'
-            },
-            {
-                username: '语言学习者Lisa',
-                avatar: '👩‍🎓',
-                rating: 4,
-                comment: 'Quiz功能很实用，特别是AI评分，让我能及时了解学习效果。',
-                date: '2024-10-20'
-            }
-        ];
-
-        const reviewsContainer = reviewsSection.createDiv({ cls: 'reviews-container' });
-
-        reviews.forEach(review => {
-            this.createReviewCard(reviewsContainer, review);
-        });
-    }
-
-    private createReviewCard(container: HTMLElement, review: UserReview): void {
-        const card = container.createDiv({ cls: 'review-card' });
-
-        const header = card.createDiv({ cls: 'review-header' });
-
-        const userInfo = header.createDiv({ cls: 'user-info' });
-
-        const avatar = userInfo.createDiv({ cls: 'user-avatar' });
-        avatar.setText(review.avatar);
-
-        const userDetails = userInfo.createDiv({ cls: 'user-details' });
-
-        const username = userDetails.createDiv({ cls: 'username' });
-        username.setText(review.username);
-
-        const date = userDetails.createDiv({ cls: 'review-date' });
-        date.setText(review.date);
-
-        const rating = header.createDiv({ cls: 'review-rating' });
-        for (let i = 0; i < 5; i++) {
-            const star = rating.createDiv({ cls: i < review.rating ? 'star filled' : 'star' });
-            star.setText('⭐');
-        }
-
-        const comment = card.createDiv({ cls: 'review-comment' });
-        comment.setText(review.comment);
     }
 
     private renderChangelog(container: HTMLElement): void {
