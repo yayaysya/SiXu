@@ -45,7 +45,7 @@
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 0px;
 }
 
 /* 状态栏样式 */
@@ -1291,41 +1291,50 @@ button.mod-cta:hover {
     margin-bottom: 24px;
 }
 
-.quick-start-buttons {
+/* 瓷片区（Tiles） */
+.quick-tiles-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
 }
 
-.quick-start-btn {
-    flex: 1;
+.quick-tile {
+    position: relative;
     padding: 16px;
-    border-radius: 8px;
-    border: none;
-    font-size: 0.95em;
-    font-weight: 500;
+    border-radius: 12px;
+    color: #fff;
+    min-height: 90px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     cursor: pointer;
-    transition: all 0.2s;
-    width: 100%;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-.quick-start-btn.primary {
-    background: var(--interactive-accent);
-    color: var(--text-on-accent);
-}
+.quick-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(0,0,0,0.18); }
 
-.quick-start-btn.primary:hover {
-    background: var(--interactive-accent-hover);
-}
+.tile-icon { font-size: 18px; opacity: 0.9; }
+.tile-label { font-size: 14px; font-weight: 600; letter-spacing: 0.2px; }
 
-.quick-start-btn.secondary {
-    background: var(--background-secondary);
-    color: var(--text-normal);
-    border: 1px solid var(--background-modifier-border);
-}
+/* 彩色主题（深浅兼容，采用纯色渐变） */
+.tile-blue  { --tile-bg: linear-gradient(135deg, #5B8DEF, #3B6BE0); }
+.tile-green { --tile-bg: linear-gradient(135deg, #32D296, #21B383); }
+.tile-orange{ --tile-bg: linear-gradient(135deg, #FFA142, #FF7F1A); }
+.tile-purple{ --tile-bg: linear-gradient(135deg, #8B5CF6, #6D28D9); }
+.tile-pink  { --tile-bg: linear-gradient(135deg, #F472B6, #DB2777); }
+.tile-teal  { --tile-bg: linear-gradient(135deg, #14B8A6, #0E9387); }
 
-.quick-start-btn.secondary:hover {
-    background: var(--background-modifier-hover);
+/* 兼容早期：直接把背景应用到带有 tile-* 的元素上 */
+.tile-blue,
+.tile-green,
+.tile-orange,
+.tile-purple,
+.tile-pink,
+.tile-teal { background: var(--tile-bg); }
+
+@media (min-width: 800px) {
+    .quick-tiles-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* ===== 侧边内嵌弹层（确认整理当前笔记） ===== */
@@ -2492,6 +2501,165 @@ button.mod-cta:hover {
 
 /* ===== 闪卡卡组管理样式 ===== */
 
+/* ---------- 文件夹风格卡片（Folder Card） ---------- */
+/* 设计目标：还原截图中的上半部封面 + 下半部暗色“文件夹”与左侧页签效果 */
+.deck-card.folder-card {
+    position: relative;
+    padding: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    /* 方形瓷贴比例 */
+    aspect-ratio: 2 / 1;
+    /* 扁平风格：去除外部阴影 */
+    box-shadow: none;
+}
+
+/* 顶部封面（可用渐变/图片） */
+.folder-cover {
+    position: absolute;
+    inset: 0 0 50% 0; /* 顶部高度减少（约 46% 可见） */
+    background: radial-gradient(120% 80% at 20% 20%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.12) 22%, rgba(0,0,0,0) 38%),
+                linear-gradient(135deg, #ff5a3d 0%, #fd8a3b 38%, #f44336 55%, #1c1c1c 95%);
+    background-size: cover;
+}
+
+.folder-cover .cover-label {
+    position: absolute;
+    right: 14px;
+    top: 14px;
+    color: #fff;
+    text-align: right;
+    font-weight: 600;
+    line-height: 1.15;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+}
+
+/* 下半部“文件夹”主体 */
+.folder-overlay {
+    position: absolute;
+    inset: 0;
+    /* 默认基底；色板类提供 --tile-bg 变量实现“随机”背景色 */
+    background: var(--tile-bg, var(--background-secondary));
+    border-radius: 18px;
+    box-shadow: none; /* 扁平：无内阴影 */
+    border: none;     /* 扁平：无分割线 */
+}
+
+/* 左侧页签（与主体同色叠加，上缘贴近封面） */
+/* 已移除 folder-tab，转到 body 内部呈现 */
+
+/* 下半部栅格与底部信息排版 */
+.folder-body {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 14px;
+    top: 16px; /* 顶部小内边距 */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* 顶部信息 + 底部信息 */
+}
+
+.folder-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.folder-title { color: #fff; font-weight: 800; }
+.folder-subtitle { color: #fff; font-size: 0.95em; opacity: .95; }
+
+/* 顶部显示的中文日期 */
+.folder-date-ch { color: #fff; font-size: .95em; opacity: .92; }
+
+.folder-footer { display: flex; align-items: flex-end; justify-content: space-between; }
+
+.folder-date { display: flex; align-items: baseline; gap: 8px; color: #fff; }
+
+.folder-date .day {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.folder-date .month {
+    opacity: 0.85;
+}
+
+.folder-count { color: #fff; opacity: .95; font-weight: 700; }
+
+/* 底部掌握率展示：大号百分比 + 小号“掌握率”标签 */
+.folder-mastery { color: #fff; display: flex; align-items: baseline; gap: 6px; }
+.folder-mastery .value { font-size: 1.6rem; line-height: 1; font-weight: 900; }
+.folder-mastery .label { font-size: .9rem; opacity: .95; font-weight: 700; }
+
+/* 行为按钮在文件夹风格中做弱化展示（可选） */
+.folder-actions {
+    position: absolute;
+    right: 16px;
+    bottom: 54px;
+    display: flex;
+    gap: 8px;
+}
+
+.folder-actions .deck-btn { /* 复用现有按钮视觉 */
+    padding: 6px 10px;
+    border-radius: 8px;
+}
+
+/* ---------- 创建新卡组：虚线边框 + 加号 ---------- */
+.deck-card.create-new {
+    aspect-ratio: 2 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--background-primary);
+    border: 2px dashed var(--background-modifier-border);
+    border-radius: 18px;
+    color: var(--text-muted);
+    box-shadow: none;
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.deck-card.create-new:hover {
+    border-color: var(--interactive-accent);
+    color: var(--text-normal);
+    transform: translateY(-2px);
+}
+
+.deck-card.create-new h3 {
+    margin: 6px 0 0 0;
+    font-size: 1.05rem;
+    color: var(--text-normal);
+}
+
+.deck-card.create-new p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.create-plus-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.create-plus-circle svg {
+    width: 25px;
+    height: 25px;
+    stroke: currentColor;
+}
+
 /* 卡组列表容器 */
 .flashcard-deck-list {
 	display: grid;
@@ -3365,12 +3533,44 @@ button.mod-cta:hover {
 
 .create-path-modal .modal-subtitle {
 	color: var(--text-muted);
-	margin-bottom: 24px;
+	margin-bottom: 0;
 	font-size: 14px;
+	text-align: left;
 }
 
 .create-path-modal .setting-item {
-	margin-bottom: 20px;
+	margin-bottom: 0;
+	padding: 0.5em 0; /* 减少高度：由默认0.75em改为0.5em */
+}
+
+/* 创建路径模态框：控制区右对齐与输入框默认边框可见 */
+.create-path-modal .setting-item-control {
+	margin-left: auto;
+	display: flex;
+	justify-content: flex-end;
+}
+
+.create-path-modal .setting-item-control input[type="text"] {
+	/* 右侧对齐且默认显示边框 */
+	max-width: 360px;
+	width: 100%;
+	padding: 6px 12px;
+	line-height: 1.4;
+	box-sizing: border-box;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background-color: var(--background-primary);
+	box-shadow: none;
+}
+
+.create-path-modal .setting-item-control input[type="text"]:hover {
+	border-color: var(--background-modifier-border);
+}
+
+.create-path-modal .setting-item-control input[type="text"]:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px var(--interactive-accent-hover);
 }
 
 .create-path-modal .setting-item-info {
@@ -5841,3 +6041,62 @@ button.mod-cta:hover {
 .results-header {
     padding: 0 20px 0 0; /* 右侧20，左侧0 */
 }
+/* 学习选项瓷贴 */
+.learning-tiles-grid {
+    display: grid;
+    grid-template-columns: 1fr; /* 每个卡片一行 */
+    gap: 14px;
+    margin-top: 8px;
+}
+
+.learning-tile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px;
+    min-height: 140px;
+    border-radius: 14px;
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+.learning-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0,0,0,0.22); }
+
+.tile-text { display: flex; flex-direction: column; gap: 6px; }
+.tile-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: .2px; color: #fff; line-height: 1.2; }
+.tile-subtitle { margin: 0; font-size: 14px; font-weight: 600; color: #fff; opacity: 1; }
+
+.tile-graphic { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; opacity: .95; }
+.tile-graphic-icon { width: 72px; height: 72px; color: #fff; }
+.tile-graphic-icon svg { width: 72px; height: 72px; }
+
+/* ===== Quiz Hub 小型瓷贴 ===== */
+.quiz-tiles-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.quiz-tile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px;
+    min-height: 110px; /* 小一号 */
+    border-radius: 12px;
+    color: #fff;
+    box-shadow: 0 5px 14px rgba(0,0,0,0.16);
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+.quiz-tile:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0,0,0,0.2); }
+
+.quiz-tile .tile-title { font-size: 18px; font-weight: 800; color: #fff; }
+.quiz-tile .tile-subtitle { font-size: 12px; font-weight: 600; color: #fff; opacity: 0.95; }
+.quiz-tile .tile-graphic { width: 56px; height: 56px; }
+.quiz-tile .tile-graphic-icon { width: 56px; height: 56px; color: #fff; }
+.quiz-tile .tile-graphic-icon svg { width: 56px; height: 56px; }
+
+/* 保持单列布局，无需响应式改列数 */

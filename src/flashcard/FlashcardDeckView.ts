@@ -22,6 +22,17 @@ export class FlashcardDeckView extends ItemView {
 	private progressCard: ProgressCard | null = null;
 	private isCancelled: boolean = false;
 
+	// 根据字符串生成稳定的瓷贴颜色类
+	private getTileColorClass(key: string): string {
+		const palette = ['tile-blue', 'tile-green', 'tile-orange', 'tile-purple', 'tile-pink', 'tile-teal'];
+		let hash = 0;
+		for (let i = 0; i < key.length; i++) {
+			hash = ((hash << 5) - hash) + key.charCodeAt(i);
+			hash |= 0;
+		}
+		return palette[Math.abs(hash) % palette.length];
+	}
+
 	constructor(leaf: WorkspaceLeaf, plugin: NotebookLLMPlugin) {
 		super(leaf);
 		this.plugin = plugin;
@@ -152,19 +163,15 @@ export class FlashcardDeckView extends ItemView {
 	/**
 	 * 渲染"创建新卡组"卡片
 	 */
-	private renderCreateNewDeckCard(container: HTMLElement): void {
+private renderCreateNewDeckCard(container: HTMLElement): void {
+		// 扁平“创建新卡组”卡片（虚线边框 + 加号）
 		const card = container.createDiv({ cls: 'deck-card create-new' });
-
-		const icon = card.createDiv({ cls: 'deck-icon' });
-		icon.setText('➕');
-
+		const icon = card.createDiv({ cls: 'create-plus-circle' });
+		setIcon(icon, 'plus');
 		card.createEl('h3', { text: '创建新闪卡组' });
 		card.createEl('p', { text: '从笔记生成学习卡片' });
-
-		card.addEventListener('click', () => {
-			this.showCreateDeckModal();
-		});
-	}
+		card.addEventListener('click', () => this.showCreateDeckModal());
+}
 
 	/**
 	 * 渲染卡组卡片
@@ -172,48 +179,43 @@ export class FlashcardDeckView extends ItemView {
 	private renderDeckCard(container: HTMLElement, deck: FlashcardDeck): void {
 		const isSelected = this.selectedDeckIds.has(deck.id);
 		const card = container.createDiv({
-			cls: isSelected ? 'deck-card selected' : 'deck-card'
+			cls: (isSelected ? 'deck-card selected ' : 'deck-card ') + 'folder-card'
 		});
 
-		// 卡组名称
-		const titleRow = card.createDiv({ cls: 'deck-title-row' });
-		titleRow.createEl('h3', { text: deck.name });
+		// 扁平瓷贴风格：仅保留主体 overlay，并应用色板类
+		const overlay = card.createDiv({ cls: `folder-overlay ${this.getTileColorClass(deck.id || deck.name)}` });
 
-		// 统计信息
-		const statsRow = card.createDiv({ cls: 'deck-stats' });
-		statsRow.createSpan({ text: `📚 ${deck.stats.total} 张卡片` });
-		statsRow.createSpan({
-			text: `🎯 掌握率：${(deck.stats.masteryRate * 100).toFixed(0)}%`
-		});
 
-		// 进度环形图（简化版：进度条）
-		const progressBar = card.createDiv({ cls: 'deck-progress-bar' });
-		const progressFill = progressBar.createDiv({ cls: 'deck-progress-fill' });
-		progressFill.style.width = `${deck.stats.masteryRate * 100}%`;
+		// 主体内容与底部信息（包含标题与副标题）
+		const body = overlay.createDiv({ cls: 'folder-body' });
+		const header = body.createDiv({ cls: 'folder-header' });
+		header.createDiv({ cls: 'folder-title', text: deck.name });
+		// 顶部显示中文日期
+		const time = deck.stats.lastStudyTime || deck.createdAt;
+		const dt = new Date(time);
+		const y = dt.getFullYear();
+		const m = String(dt.getMonth() + 1).padStart(2, '0');
+		const d = String(dt.getDate()).padStart(2, '0');
+		header.createDiv({ cls: 'folder-date-ch', text: `${y}年${m}月${d}日` });
 
-		// 详细分布
-		const distribution = card.createDiv({ cls: 'deck-distribution' });
-		distribution.createSpan({ text: `⚪ 新：${deck.stats.new}` });
-		distribution.createSpan({ text: `🟡 学习中：${deck.stats.learning}` });
-		distribution.createSpan({ text: `🔵 复习：${deck.stats.review}` });
-		distribution.createSpan({ text: `🟢 已掌握：${deck.stats.mastered}` });
+		const footer = body.createDiv({ cls: 'folder-footer' });
+		// 左侧显示掌握率（大号百分比 + 小号“掌握率”）
+		const masteryDiv = footer.createDiv({ cls: 'folder-mastery' });
+		const percent = Math.round(deck.stats.masteryRate * 100);
+		masteryDiv.createSpan({ cls: 'value', text: `${percent}%` });
+		masteryDiv.createSpan({ cls: 'label', text: '掌握率' });
+		// 右侧显示卡片数量
+		footer.createDiv({ cls: 'folder-count', text: `${deck.stats.total} 张` });
 
-		// 按钮区域
-		const actions = card.createDiv({ cls: 'deck-actions' });
-
-		const studyBtn = actions.createEl('button', {
-			text: '开始学习',
-			cls: 'deck-btn primary'
-		});
+		// 操作（弱化处理，仍保留功能）
+		const actions = overlay.createDiv({ cls: 'folder-actions' });
+		const studyBtn = actions.createEl('button', { text: '学习', cls: 'deck-btn primary' });
 		studyBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			this.startStudy(deck);
 		});
 
-		const selectBtn = actions.createEl('button', {
-			text: isSelected ? '✓ 已选' : '☐ 选择',
-			cls: 'deck-btn'
-		});
+		const selectBtn = actions.createEl('button', { text: isSelected ? '✓ 已选' : '选择', cls: 'deck-btn' });
 		selectBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			this.toggleDeckSelection(deck.id);

@@ -77,6 +77,17 @@ export class CombineNotesView extends ItemView {
 	private fileChangeEventRef: EventRef | null = null;
 	private metadataChangeEventRef: EventRef | null = null;
 
+	// 根据字符串生成稳定的瓷贴颜色类（视觉上等于“随机”）
+	private getTileColorClass(key: string): string {
+		const palette = ['tile-blue', 'tile-green', 'tile-orange', 'tile-purple', 'tile-pink', 'tile-teal'];
+		let hash = 0;
+		for (let i = 0; i < key.length; i++) {
+			hash = ((hash << 5) - hash) + key.charCodeAt(i);
+			hash |= 0;
+		}
+		return palette[Math.abs(hash) % palette.length];
+	}
+
 	// Quiz相关状态
 	private quizViewState: QuizViewState = 'list';
 	private currentQuizFile: TFile | null = null;
@@ -1910,67 +1921,30 @@ export class CombineNotesView extends ItemView {
 	 * 渲染快捷开始按钮
 	 */
 	private renderQuickStart(container: HTMLElement): void {
-		const quickStart = container.createDiv({ cls: 'quick-start-section' });
-		quickStart.createEl('h3', { text: '快捷开始', cls: 'section-title' });
+		const section = container.createDiv({ cls: 'quick-start-section' });
+		section.createEl('h3', { text: '快捷开始', cls: 'section-title' });
 
-		const buttons = quickStart.createDiv({ cls: 'quick-start-buttons' });
+		const grid = section.createDiv({ cls: 'quick-tiles-grid' });
 
-		// 整理你的思绪
-		const btn1 = buttons.createEl('button', {
-			cls: 'quick-start-btn primary',
-			text: '整理你的思绪'
-		});
-		btn1.addEventListener('click', () => {
-			this.switchToPage('organize');
-		});
+		const tiles: Array<{ title: string; icon: string; color: string; onClick: () => void }> = [
+			{ title: '整理你的思绪', icon: 'layout', color: 'tile-blue', onClick: () => this.switchToPage('organize') },
+			{ title: '开始一次学习之旅', icon: 'graduation-cap', color: 'tile-green', onClick: () => this.switchToPage('learning') },
+			{ title: 'AI 整理笔记', icon: 'wand-2', color: 'tile-purple', onClick: () => this.showOrganizeCurrentNotePrompt() },
+			{ title: '学点什么', icon: 'book-open', color: 'tile-orange', onClick: () => this.openCreatePathModal() },
+			{ title: 'Flash Card', icon: 'layers', color: 'tile-teal', onClick: () => { this.switchToPage('learning'); this.learningState = 'flashcard-deck-list'; this.render(); } },
+			{ title: 'QUIZ 测验', icon: 'help-circle', color: 'tile-pink', onClick: () => { this.switchToPage('learning'); this.learningState = 'quiz-list'; this.render(); } }
+		];
 
-		// 开始一次学习之旅
-		const btn2 = buttons.createEl('button', {
-			cls: 'quick-start-btn secondary',
-			text: '开始一次学习之旅'
-		});
-		btn2.addEventListener('click', () => {
-			this.switchToPage('learning');
-		});
+		tiles.forEach(item => {
+			const tile = grid.createDiv({ cls: `quick-tile ${item.color}` });
+			tile.setAttr('role', 'button');
+			tile.setAttr('tabindex', '0');
+			tile.addEventListener('click', () => item.onClick());
+			tile.addEventListener('keypress', (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') item.onClick(); });
 
-		// AI 整理笔记（侧边内嵌弹窗确认）
-		const btnAiOrganize = buttons.createEl('button', {
-			cls: 'quick-start-btn secondary',
-			text: 'AI 整理笔记'
-		});
-		btnAiOrganize.addEventListener('click', () => {
-			this.showOrganizeCurrentNotePrompt();
-		});
-
-		// 学点什么（打开学习路径创建弹窗）
-		const btnLearnSomething = buttons.createEl('button', {
-			cls: 'quick-start-btn secondary',
-			text: '学点什么'
-		});
-		btnLearnSomething.addEventListener('click', () => {
-			this.openCreatePathModal();
-		});
-
-		// Flash Card（跳转到闪卡列表）
-		const btnFlashcard = buttons.createEl('button', {
-			cls: 'quick-start-btn secondary',
-			text: 'Flash Card'
-		});
-		btnFlashcard.addEventListener('click', () => {
-			this.switchToPage('learning');
-			this.learningState = 'flashcard-deck-list';
-			this.render();
-		});
-
-		// QUIZ 测验（跳转到试题列表）
-		const btnQuiz = buttons.createEl('button', {
-			cls: 'quick-start-btn secondary',
-			text: 'QUIZ 测验'
-		});
-		btnQuiz.addEventListener('click', () => {
-			this.switchToPage('learning');
-			this.learningState = 'quiz-list';
-			this.render();
+			const iconEl = tile.createDiv({ cls: 'tile-icon' });
+			setIcon(iconEl, item.icon);
+			tile.createDiv({ cls: 'tile-label', text: item.title });
 		});
 	}
 
@@ -2934,42 +2908,29 @@ export class CombineNotesView extends ItemView {
 		hub.createEl('h2', { text: '学习课堂', cls: 'page-title' });
 		hub.createEl('p', { text: '通过我们的课程赋能导学', cls: 'page-subtitle' });
 
-		// 学习选项
-		const options = hub.createDiv({ cls: 'learning-options' });
+		// 学习选项（瓷贴风格）
+		const tiles = hub.createDiv({ cls: 'learning-tiles-grid' });
 
-		// 学习路径 - 新增功能
-		const learningPathCard = options.createDiv({ cls: 'learning-card' });
-		const lpIcon = learningPathCard.createDiv({ cls: 'card-icon-large' });
-		lpIcon.setText('🗺️');
-		learningPathCard.createEl('h3', { text: '学习路径' });
-		learningPathCard.createEl('p', { text: 'AI 生成完整学习计划', cls: 'card-subtitle' });
+		const entries: Array<{ title: string; subtitle: string; icon: string; color: string; onClick: () => void }> = [
+			{ title: '学习路径', subtitle: 'AI 生成完整学习计划', icon: 'route', color: 'tile-purple', onClick: () => this.openCreatePathModal() },
+			{ title: '卡片背诵', subtitle: 'Flash Card 内容背诵', icon: 'layers', color: 'tile-teal', onClick: () => { this.learningState = 'flashcard-deck-list'; this.render(); } },
+			{ title: '小试牛刀', subtitle: 'Quiz 知识测验', icon: 'help-circle', color: 'tile-orange', onClick: () => { this.learningState = 'quiz-hub'; this.render(); } },
+		];
 
-		learningPathCard.addEventListener('click', () => {
-			this.openCreatePathModal();
-		});
+		entries.forEach(e => {
+			const tile = tiles.createDiv({ cls: `learning-tile ${e.color}` });
+			tile.addEventListener('click', () => e.onClick());
+			tile.setAttr('role', 'button');
+			tile.setAttr('tabindex', '0');
+			tile.addEventListener('keypress', (ev: KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') e.onClick(); });
 
-		// Flash Card
-		const flashcardCard = options.createDiv({ cls: 'learning-card' });
-		const fcIcon = flashcardCard.createDiv({ cls: 'card-icon-large' });
-		fcIcon.setText('📇');
-		flashcardCard.createEl('h3', { text: '闪卡背诵' });
-		flashcardCard.createEl('p', { text: 'Flash Card 内容背诵' });
+			const left = tile.createDiv({ cls: 'tile-text' });
+			left.createEl('h3', { text: e.title, cls: 'tile-title' });
+			left.createEl('p', { text: e.subtitle, cls: 'tile-subtitle' });
 
-		flashcardCard.addEventListener('click', () => {
-			this.learningState = 'flashcard-deck-list';
-			this.render();
-		});
-
-		// Quiz小试牛刀
-		const quizCard = options.createDiv({ cls: 'learning-card' });
-		const qzIcon = quizCard.createDiv({ cls: 'card-icon-large' });
-		qzIcon.setText('📝');
-		quizCard.createEl('h3', { text: '小试牛刀' });
-		quizCard.createEl('p', { text: 'Quiz 知识测验' });
-
-		quizCard.addEventListener('click', () => {
-			this.learningState = 'quiz-hub';
-			this.render();
+			const right = tile.createDiv({ cls: 'tile-graphic' });
+			const iconEl = right.createDiv({ cls: 'tile-graphic-icon' });
+			setIcon(iconEl, e.icon);
 		});
 	}
 
@@ -2995,24 +2956,28 @@ export class CombineNotesView extends ItemView {
 		// 第二行：副标题
 		header.createEl('p', { text: '通过试题检验学习成果', cls: 'page-subtitle' });
 
-		const options = page.createDiv({ cls: 'learning-options' });
+		// 选项区：两张小型瓷贴
+		const grid = page.createDiv({ cls: 'quiz-tiles-grid' });
 
 		// 选择已有试题
-		const existingCard = options.createDiv({ cls: 'learning-card' });
-		existingCard.createDiv({ cls: 'card-icon-large', text: '📚' });
-		existingCard.createEl('h3', { text: '选择已有试题' });
-		existingCard.createEl('p', { text: '浏览并开始一套已有试题' });
-		existingCard.addEventListener('click', () => {
-			this.learningState = 'quiz-list';
-			this.render();
-		});
+		const tileExisting = grid.createDiv({ cls: 'quiz-tile tile-blue' });
+		const left1 = tileExisting.createDiv({ cls: 'tile-text' });
+		left1.createEl('h3', { text: '选择已有试题', cls: 'tile-title' });
+		left1.createEl('p', { text: '浏览并开始一套已有试题', cls: 'tile-subtitle' });
+		const right1 = tileExisting.createDiv({ cls: 'tile-graphic' });
+		const icon1 = right1.createDiv({ cls: 'tile-graphic-icon' });
+		setIcon(icon1, 'book-open');
+		tileExisting.addEventListener('click', () => { this.learningState = 'quiz-list'; this.render(); });
 
 		// 创建新试题
-		const createCard = options.createDiv({ cls: 'learning-card' });
-		createCard.createDiv({ cls: 'card-icon-large', text: '✨' });
-		createCard.createEl('h3', { text: '创建新试题' });
-		createCard.createEl('p', { text: '从当前笔记或选择笔记生成试题' });
-		createCard.addEventListener('click', async () => {
+		const tileCreate = grid.createDiv({ cls: 'quiz-tile tile-orange' });
+		const left2 = tileCreate.createDiv({ cls: 'tile-text' });
+		left2.createEl('h3', { text: '创建新试题', cls: 'tile-title' });
+		left2.createEl('p', { text: '从当前笔记或选择笔记生成试题', cls: 'tile-subtitle' });
+		const right2 = tileCreate.createDiv({ cls: 'tile-graphic' });
+		const icon2 = right2.createDiv({ cls: 'tile-graphic-icon' });
+		setIcon(icon2, 'file-plus');
+		tileCreate.addEventListener('click', async () => {
 			let sourceFile = this.plugin.app.workspace.getActiveFile();
 			if (!(sourceFile instanceof TFile)) {
 				// 无激活笔记，弹出文件选择器
@@ -3419,12 +3384,14 @@ export class CombineNotesView extends ItemView {
 				}
 			}
 
-			// 先添加"创建新卡组"卡片（放在最前面）
-			const createCard = deckContainer.createDiv({ cls: 'deck-card create-new-ios' });
+            // 先添加"创建新卡组"卡片（放在最前面）
+            const createCard = deckContainer.createDiv({ cls: 'deck-card create-new' });
 
-			// 简化版本：只创建基本内容，不用复杂嵌套
-			createCard.createEl('h3', { text: '创建新卡组' });
-			createCard.createEl('p', { text: '从笔记生成学习卡片' });
+            // 新样式：虚线边框 + SVG 加号
+            const icon = createCard.createDiv({ cls: 'create-plus-circle' });
+            setIcon(icon, 'plus');
+            createCard.createEl('h3', { text: '创建新卡组' });
+            createCard.createEl('p', { text: '从笔记生成学习卡片' });
 
 			createCard.addEventListener('click', (e) => {
 				e.preventDefault();
@@ -3478,56 +3445,57 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染单个卡组卡片
 	 */
-	private renderDeckCard(container: HTMLElement, deck: FlashcardDeck, storage: FlashcardStorage): void {
-		const isSelected = this.selectedDeckIds.has(deck.id);
-		const card = container.createDiv({
-			cls: isSelected ? 'deck-card selected' : 'deck-card'
-		});
+    private renderDeckCard(container: HTMLElement, deck: FlashcardDeck, storage: FlashcardStorage): void {
+        const isSelected = this.selectedDeckIds.has(deck.id);
+        const card = container.createDiv({
+            cls: (isSelected ? 'deck-card selected ' : 'deck-card ') + 'folder-card'
+        });
 
-		// 标题
-		const titleRow = card.createDiv({ cls: 'deck-title-row' });
-		titleRow.createEl('h3', { text: deck.name });
+        // 扁平瓷贴风格：仅保留主体 overlay（无封面、无阴影）
+        const overlay = card.createDiv({ cls: `folder-overlay ${this.getTileColorClass(deck.id || deck.name)}` });
 
-		// 统计信息
-		const stats = card.createDiv({ cls: 'deck-stats' });
-		stats.createEl('span', { text: `📊 ${deck.stats.total} 张卡片` });
-		stats.createEl('span', { text: `✅ ${deck.stats.mastered} 张已掌握` });
+        // 主体内容与底部信息（包含标题与副标题）
+        const body = overlay.createDiv({ cls: 'folder-body' });
+        const header = body.createDiv({ cls: 'folder-header' });
+        header.createDiv({ cls: 'folder-title', text: deck.name });
+        // 顶部中文日期
+        const time = deck.stats.lastStudyTime || deck.createdAt;
+        const dt = new Date(time);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        header.createDiv({ cls: 'folder-date-ch', text: `${y}年${m}月${d}日` });
 
-		// 进度条
-		const progressBar = card.createDiv({ cls: 'deck-progress-bar' });
-		const progressFill = progressBar.createDiv({ cls: 'deck-progress-fill' });
-		progressFill.style.width = `${deck.stats.masteryRate}%`;
+        const footer = body.createDiv({ cls: 'folder-footer' });
+        // 左：掌握率（大号百分比+小号文字）
+        const masteryDiv = footer.createDiv({ cls: 'folder-mastery' });
+        const percent = Math.round(deck.stats.masteryRate * 100);
+        masteryDiv.createSpan({ cls: 'value', text: `${percent}%` });
+        masteryDiv.createSpan({ cls: 'label', text: '掌握率' });
+        // 右：张数
+        footer.createDiv({ cls: 'folder-count', text: `${deck.stats.total} 张` });
 
-		// 详细分布
-		const distribution = card.createDiv({ cls: 'deck-distribution' });
-		distribution.createEl('span', { text: `新卡: ${deck.stats.new}` });
-		distribution.createEl('span', { text: `学习中: ${deck.stats.learning}` });
-		distribution.createEl('span', { text: `复习: ${deck.stats.review}` });
+        // 操作：学习/选择/删除（弱化显示）
+        const actions = overlay.createDiv({ cls: 'folder-actions' });
 
-		// 按钮区域
-		const actions = card.createDiv({ cls: 'deck-actions' });
+        const studyBtn = actions.createEl('button', { text: '学习', cls: 'deck-btn primary' });
+        studyBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.startStudying(deck.id);
+        });
 
-		const studyBtn = actions.createEl('button', { text: '开始学习', cls: 'deck-btn primary' });
-		studyBtn.addEventListener('click', async (e) => {
-			e.stopPropagation();
-			await this.startStudying(deck.id);
-		});
+        const selectBtn = actions.createEl('button', { text: isSelected ? '✓ 已选' : '选择', cls: 'deck-btn' });
+        selectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleDeckSelection(deck.id);
+        });
 
-		const selectBtn = actions.createEl('button', {
-			text: isSelected ? '✓ 已选' : '☐ 选择',
-			cls: 'deck-btn'
-		});
-		selectBtn.addEventListener('click', (e) => {
-			e.stopPropagation();
-			this.toggleDeckSelection(deck.id);
-		});
-
-		const deleteBtn = actions.createEl('button', { text: '删除', cls: 'deck-btn' });
-		deleteBtn.addEventListener('click', async (e) => {
-			e.stopPropagation();
-			await this.deleteDeck(deck.id, storage);
-		});
-	}
+        const deleteBtn = actions.createEl('button', { text: '删除', cls: 'deck-btn' });
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await this.deleteDeck(deck.id, storage);
+        });
+    }
 
 	/**
 	 * 开始学习卡组
