@@ -226,17 +226,22 @@ export class FlashcardDeckView extends ItemView {
 	private renderMultiSelectActions(container: HTMLElement): void {
 		const actionsBar = container.createDiv({ cls: 'multi-select-actions' });
 
-		actionsBar.createSpan({ text: `已选中 ${this.selectedDeckIds.size} 个卡组` });
+		// 第一行：已选择 X 个卡组
+		const summaryRow = actionsBar.createDiv({ cls: 'summary-row' });
+		summaryRow.createSpan({ text: `已选中 ${this.selectedDeckIds.size} 个卡组` });
 
-		const mergeBtn = actionsBar.createEl('button', {
-			text: '🔗 合并选中的卡组',
+		// 第二行：操作按钮
+		const buttonsRow = actionsBar.createDiv({ cls: 'actions-row' });
+
+		const mergeBtn = buttonsRow.createEl('button', {
+			text: '🔗 合并卡组',
 			cls: 'action-btn primary'
 		});
 		mergeBtn.addEventListener('click', () => {
 			this.showMergeDecksModal();
 		});
 
-		const cancelBtn = actionsBar.createEl('button', {
+		const cancelBtn = buttonsRow.createEl('button', {
 			text: '✖ 取消选择',
 			cls: 'action-btn'
 		});

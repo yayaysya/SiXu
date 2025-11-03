@@ -2737,22 +2737,28 @@ button.mod-cta:hover {
 
 /* 多选操作栏 */
 .multi-select-actions {
-	position: sticky;
-	bottom: 0;
-	background: var(--background-secondary);
-	border-top: 2px solid var(--interactive-accent);
-	padding: 16px;
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
-	z-index: 10;
+    position: sticky;
+    bottom: 0;
+    background: var(--background-secondary);
+    border-top: 2px solid var(--interactive-accent);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 10;
 }
 
-.multi-select-actions span {
-	flex: 1;
-	font-weight: 600;
-	color: var(--text-normal);
+.multi-select-actions .summary-row {
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+.multi-select-actions .actions-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
 }
 
 .action-btn {
