@@ -25,7 +25,7 @@ type ViewPage = 'home' | 'organize' | 'learning' | 'profile';
 /**
  * 学习中心子页面状态
  */
-type LearningViewState = 'hub' | 'quiz-hub' | 'quiz-list' | 'quiz-exam' | 'quiz-result' | 'flashcard-deck-list' | 'flashcard-study' | 'flashcard-create';
+type LearningViewState = 'hub' | 'quiz-hub' | 'quiz-list' | 'quiz-exam' | 'quiz-result' | 'quiz-results-list' | 'flashcard-deck-list' | 'flashcard-study' | 'flashcard-create';
 
 /**
  * @deprecated 旧的Tab类型，保留用于兼容
@@ -230,20 +230,20 @@ export class CombineNotesView extends ItemView {
 		const contentArea = container.createDiv({ cls: 'view-content-area' });
 
 		// 根据当前页面渲染不同内容
-		switch (this.currentPage) {
-			case 'home':
-				this.renderHomePage(contentArea);
-				break;
-			case 'organize':
-				this.renderOrganizePage(contentArea);
-				break;
-			case 'learning':
-				this.renderLearningPage(contentArea);
-				break;
-			case 'profile':
-				this.renderProfilePage(contentArea);
-				break;
-		}
+        switch (this.currentPage) {
+            case 'home':
+                this.renderHomePage(contentArea);
+                break;
+            case 'organize':
+                this.renderOrganizePage(contentArea);
+                break;
+            case 'learning':
+                this.renderLearningPage(contentArea);
+                break;
+            case 'profile':
+                this.renderProfilePage(contentArea);
+                break;
+        }
 
 		// 底部导航栏
 		this.renderBottomNavigation(container);
@@ -2829,6 +2829,9 @@ export class CombineNotesView extends ItemView {
 			case 'quiz-result':
 				this.renderResultView(container);
 				break;
+			case 'quiz-results-list':
+				this.renderQuizResultsListPage(container);
+				break;
 			case 'flashcard-deck-list':
 				this.renderFlashcardDeckList(container);
 				break;
@@ -3029,36 +3032,200 @@ export class CombineNotesView extends ItemView {
 		title.setText(frontmatter?.title || file.basename);
 
 		// 元信息
-		const meta = card.createDiv({ cls: 'quiz-card-meta' });
+        const meta = card.createDiv({ cls: 'quiz-card-meta' });
 
-		const difficulty = frontmatter?.difficulty || '未知';
-		const difficultyEl = meta.createSpan({ cls: `difficulty-badge ${difficulty}`, text: difficulty });
-		console.log(`[Quiz卡片] 读取到难度:`, difficulty);
+        const difficulty = frontmatter?.difficulty || '未知';
+        const difficultyEl = meta.createSpan({ cls: `difficulty-badge ${difficulty}`, text: difficulty });
+        console.log(`[Quiz卡片] 读取到难度:`, difficulty);
 
-		const totalQuestions = frontmatter?.total_questions || 0;
-		const questionEl = meta.createSpan({ cls: 'question-count', text: `${totalQuestions}道题` });
-		console.log(`[Quiz卡片] 读取到题目数:`, totalQuestions);
+        const totalQuestions = frontmatter?.total_questions || 0;
+        const questionEl = meta.createSpan({ cls: 'question-count', text: `${totalQuestions}道题` });
+        console.log(`[Quiz卡片] 读取到题目数:`, totalQuestions);
 
-		// 完成情况
-		const results = frontmatter?.quiz_results || [];
-		const isCompleted = Array.isArray(results) && results.length > 0;
+        // 完成情况
+        const results = frontmatter?.quiz_results || [];
+        const isCompleted = Array.isArray(results) && results.length > 0;
 
-		if (isCompleted) {
-			const completedBadge = card.createDiv({ cls: 'completed-badge' });
-			completedBadge.setText('✓ 已完成');
-		}
+        // 最近一次得分（右侧显示，仅完成后展示）
+        if (isCompleted) {
+            try {
+                const latest = await this.getLatestQuizResultInfo(results as string[], file);
+                if (latest) {
+                    meta.createSpan({ cls: 'latest-score', text: `最近一次: ${latest.percent}分` });
+                }
+            } catch (e) {
+                console.warn('获取最近成绩失败', e);
+            }
+        }
+
+        // 已完成状态：不再显示旧的“已完成”角标，展示两个操作按钮
 
 		// 按钮
-		const actions = card.createDiv({ cls: 'quiz-card-actions' });
+        const actions = card.createDiv({ cls: 'quiz-card-actions' });
 
-		const startBtn = actions.createEl('button', {
-			cls: 'quiz-action-btn primary',
-			text: isCompleted ? '重新测验' : '开始测验'
-		});
+        if (isCompleted) {
+            // 第一行：查看试题 + 考试结果
+            const row1 = actions.createDiv({ cls: 'quiz-card-actions-row' });
+            const viewQuizBtn = row1.createEl('button', { cls: 'quiz-action-btn', text: '查看试题' });
+            viewQuizBtn.addEventListener('click', () => this.openFile(file.path));
 
-		startBtn.addEventListener('click', async () => {
-			await this.startQuiz(file);
+            const resultsBtn = row1.createEl('button', { cls: 'quiz-action-btn primary', text: '考试结果' });
+            resultsBtn.addEventListener('click', async () => {
+                this.currentQuizFile = file;
+                this.learningState = 'quiz-results-list';
+                this.render();
+            });
+
+            // 第二行：重新测验
+            const row2 = actions.createDiv({ cls: 'quiz-card-actions-row' });
+            const startBtn = row2.createEl('button', {
+                cls: 'quiz-action-btn primary',
+                text: '重新测验'
+            });
+            startBtn.addEventListener('click', async () => {
+                await this.startQuiz(file);
+            });
+        } else {
+            // 未完成：仅一行开始测验
+            const row = actions.createDiv({ cls: 'quiz-card-actions-row' });
+            const startBtn = row.createEl('button', {
+                cls: 'quiz-action-btn primary',
+                text: '开始测验'
+            });
+            startBtn.addEventListener('click', async () => {
+                await this.startQuiz(file);
+            });
+        }
+    }
+
+    /**
+     * 获取最近一次考试结果信息（分数与时间）
+     */
+    private async getLatestQuizResultInfo(results: string[], quizFile: TFile): Promise<{ percent: number; examDate: string } | null> {
+        const parseLink = (s: string) => {
+            const m = String(s).match(/\[\[(.+?)\]\]/);
+            return m ? m[1] : s;
+        };
+
+        let best: { percent: number; examDate: string } | null = null;
+
+        for (const entry of results) {
+            const name = parseLink(entry);
+            const file = this.app.metadataCache.getFirstLinkpathDest(name, quizFile.path);
+            if (!(file instanceof TFile)) continue;
+
+            try {
+                const content = await this.app.vault.read(file);
+                const frontMatch = content.match(/^---\n([\s\S]*?)\n---/);
+                if (!frontMatch) continue;
+                const yaml = frontMatch[1];
+                const pm = yaml.match(/percentage:\s*([0-9]+(?:\.[0-9]+)?)/);
+                const dm = yaml.match(/exam_date:\s*(.+)/);
+                const percent = pm ? Math.floor(parseFloat(pm[1])) : 0;
+                const examDate = dm ? dm[1].trim() : '';
+
+                if (!best || (examDate && examDate.localeCompare(best.examDate) > 0)) {
+                    best = { percent, examDate };
+                }
+            } catch {}
+        }
+        return best;
+    }
+
+	/**
+	 * 渲染“考试结果列表”页面（展示某套试题的历史成绩）
+	 */
+    private async renderQuizResultsListPage(container: HTMLElement): Promise<void> {
+        // 头部（与列表同级，而非被列表包裹）
+        const header = container.createDiv({ cls: 'learning-page-header results-header' });
+		const titleRow = header.createDiv({ cls: 'header-title-row' });
+		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
+		setIcon(backBtn, 'arrow-left');
+		backBtn.addEventListener('click', () => {
+			this.learningState = 'quiz-list';
+			this.render();
 		});
+		titleRow.createEl('h2', { text: '考试结果', cls: 'page-title' });
+		header.createEl('p', { text: '查看历次考试结果', cls: 'page-subtitle' });
+
+        const page = container.createDiv({ cls: 'quiz-results-page' });
+        const list = page.createDiv({ cls: 'quiz-results-list' });
+
+		if (!this.currentQuizFile) {
+			list.createEl('p', { text: '未选择试题', cls: 'empty-state' });
+			return;
+		}
+
+		// 读取 quiz 文件的 frontmatter，获取 quiz_results
+		const metadata = this.app.metadataCache.getFileCache(this.currentQuizFile);
+		let results: string[] = [];
+		const fm: any = metadata?.frontmatter;
+		if (fm && Array.isArray(fm.quiz_results)) {
+			results = fm.quiz_results as string[];
+		}
+
+		if (results.length === 0) {
+			list.createEl('p', { text: '暂无历史考试结果', cls: 'empty-state' });
+			return;
+		}
+
+		// 解析 [[文件名]]
+		const parseLink = (s: string) => {
+			const m = String(s).match(/\[\[(.+?)\]\]/);
+			return m ? m[1] : s;
+		};
+
+		// 加载每个结果文件的摘要信息
+		const items: Array<{ file: TFile; percentage: number; examDate: string; title: string }> = [];
+
+		for (const entry of results) {
+			const name = parseLink(entry);
+			const file = this.app.metadataCache.getFirstLinkpathDest(name, this.currentQuizFile.path);
+			if (!(file instanceof TFile)) continue;
+
+			try {
+				const content = await this.app.vault.read(file);
+				const frontMatch = content.match(/^---\n([\s\S]*?)\n---/);
+				let percentage = 0;
+				let examDate = '';
+				if (frontMatch) {
+					const yaml = frontMatch[1];
+					const pm = yaml.match(/percentage:\s*([0-9]+(?:\.[0-9]+)?)/);
+					if (pm) percentage = Math.floor(parseFloat(pm[1]));
+					const dm = yaml.match(/exam_date:\s*(.+)/);
+					if (dm) examDate = dm[1].trim();
+				}
+				items.push({ file, percentage, examDate, title: this.currentQuizFile.basename });
+			} catch (e) {
+				console.warn('读取结果文件失败', name, e);
+			}
+		}
+
+		// 按时间倒序
+		items.sort((a, b) => (b.examDate || '').localeCompare(a.examDate || ''));
+
+		// 渲染卡片
+		for (const it of items) {
+			const card = list.createDiv({ cls: 'result-item-card' });
+
+			// 圆形分数
+			const circle = card.createDiv({ cls: 'result-score-circle' });
+			const deg = Math.max(0, Math.min(360, it.percentage * 3.6));
+			circle.style.setProperty('--deg', `${deg}deg`);
+			circle.addClass(it.percentage >= 80 ? 'good' : it.percentage >= 60 ? 'mid' : 'low');
+            circle.createDiv({ cls: 'score-text', text: `${it.percentage}分` });
+
+			// 右侧信息
+			const info = card.createDiv({ cls: 'result-item-info' });
+			info.createDiv({ cls: 'result-item-title', text: it.title });
+			const t = it.examDate ? new Date(it.examDate) : null;
+			const timeText = t ? t.toLocaleString('zh-CN') : '';
+			info.createDiv({ cls: 'result-item-time', text: timeText });
+
+			const actionRow = info.createDiv({ cls: 'result-item-actions' });
+			const detailBtn = actionRow.createEl('button', { cls: 'result-detail-btn mod-cta', text: '查看详情' });
+			detailBtn.addEventListener('click', () => this.openFile(it.file.path));
+		}
 	}
 
 	/**

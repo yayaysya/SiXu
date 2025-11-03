@@ -121,7 +121,7 @@ export class ResultGenerator {
 		const dateStr = date.toLocaleString('zh-CN');
 
         let markdown = `---
-quiz_file: ${result.quizFile}
+quiz_file: "${result.quizFile}"
 exam_date: ${result.examDate}
 total_score: ${formatNumber(result.totalScore)}
 max_score: ${formatNumber(result.maxScore, 0)}

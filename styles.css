@@ -1599,6 +1599,7 @@ button.mod-cta:hover {
     gap: 8px;
     margin-bottom: 12px;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .difficulty-badge {
@@ -1631,6 +1632,13 @@ button.mod-cta:hover {
     color: var(--text-muted);
 }
 
+.latest-score {
+    margin-left: auto;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
 .completed-badge {
     padding: 4px 12px;
     background: var(--color-green);
@@ -1642,8 +1650,14 @@ button.mod-cta:hover {
 
 .quiz-card-actions {
     display: flex;
+    flex-direction: column;
     gap: 8px;
     margin-top: 12px;
+}
+
+.quiz-card-actions-row {
+    display: flex;
+    gap: 8px;
 }
 
 .quiz-action-btn {
@@ -1670,6 +1684,95 @@ button.mod-cta:hover {
 
 .quiz-action-btn.primary:hover {
     background: var(--interactive-accent-hover);
+}
+
+/* ===== 考试结果列表页 ===== */
+.quiz-results-page {
+    padding: 20px;
+}
+
+.quiz-results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.result-item-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 10px;
+    background: var(--background-primary);
+}
+
+.result-score-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    position: relative;
+    background:
+      conic-gradient(var(--ring-color, var(--interactive-accent)) 0 var(--deg, 0deg), var(--background-modifier-border) var(--deg, 0deg) 360deg);
+}
+.result-score-circle::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: var(--background-primary);
+    z-index: 0;
+}
+.result-score-circle .score-text {
+    position: relative;
+    font-size: 0.9em;
+    font-weight: 700;
+    color: var(--text-normal);
+    z-index: 1;
+}
+.result-score-circle.good { --ring-color: var(--color-green); }
+.result-score-circle.mid  { --ring-color: var(--color-orange); }
+.result-score-circle.low  { --ring-color: var(--color-red); }
+
+.result-item-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.result-item-title {
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+.result-item-time {
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+.result-item-actions {
+    margin-top: 4px;
+}
+.result-detail-btn {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+}
+.result-detail-btn.mod-cta {
+    border: none;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+.result-detail-btn.mod-cta:hover { background: var(--interactive-accent-hover); }
+
+/* 详情按钮右侧箭头 */
+.result-detail-btn::after {
+    content: ' \003E'; /* '>' */
+    margin-left: 4px;
 }
 
 /* ===== "我的"页面样式 ===== */
@@ -5641,4 +5744,7 @@ button.mod-cta:hover {
         flex-direction: column;
         gap: 12px;
     }
+}
+.results-header {
+    padding: 0 20px 0 0; /* 右侧20，左侧0 */
 }
