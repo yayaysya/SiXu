@@ -1134,6 +1134,7 @@ button.mod-cta:hover {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    position: relative; /* 使内部绝对定位覆盖仅作用于本视图 */
 }
 
 /* 内容区域 */
@@ -1291,7 +1292,8 @@ button.mod-cta:hover {
 }
 
 .quick-start-buttons {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
 }
 
@@ -1304,6 +1306,7 @@ button.mod-cta:hover {
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    width: 100%;
 }
 
 .quick-start-btn.primary {
@@ -1323,6 +1326,47 @@ button.mod-cta:hover {
 
 .quick-start-btn.secondary:hover {
     background: var(--background-modifier-hover);
+}
+
+/* ===== 侧边内嵌弹层（确认整理当前笔记） ===== */
+.side-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    backdrop-filter: blur(2px);
+}
+
+.side-modal-card {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+    padding: 20px;
+    min-width: 280px;
+    max-width: 480px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.side-modal-card h3 {
+    margin: 0 0 8px 0;
+}
+
+.side-modal-message {
+    color: var(--text-normal);
+    margin-bottom: 16px;
+}
+
+.side-modal-message strong {
+    font-weight: 700;
+}
+
+.side-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
 /* 最近情况 */
@@ -1818,7 +1862,7 @@ button.mod-cta:hover {
     }
 
     .quick-start-buttons {
-        flex-direction: column;
+        grid-template-columns: 1fr;
     }
 
     .learning-options {

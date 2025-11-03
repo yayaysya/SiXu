@@ -1932,6 +1932,86 @@ export class CombineNotesView extends ItemView {
 		btn2.addEventListener('click', () => {
 			this.switchToPage('learning');
 		});
+
+		// AI 整理笔记（侧边内嵌弹窗确认）
+		const btnAiOrganize = buttons.createEl('button', {
+			cls: 'quick-start-btn secondary',
+			text: 'AI 整理笔记'
+		});
+		btnAiOrganize.addEventListener('click', () => {
+			this.showOrganizeCurrentNotePrompt();
+		});
+
+		// 学点什么（打开学习路径创建弹窗）
+		const btnLearnSomething = buttons.createEl('button', {
+			cls: 'quick-start-btn secondary',
+			text: '学点什么'
+		});
+		btnLearnSomething.addEventListener('click', () => {
+			this.openCreatePathModal();
+		});
+
+		// Flash Card（跳转到闪卡列表）
+		const btnFlashcard = buttons.createEl('button', {
+			cls: 'quick-start-btn secondary',
+			text: 'Flash Card'
+		});
+		btnFlashcard.addEventListener('click', () => {
+			this.switchToPage('learning');
+			this.learningState = 'flashcard-deck-list';
+			this.render();
+		});
+
+		// QUIZ 测验（跳转到试题列表）
+		const btnQuiz = buttons.createEl('button', {
+			cls: 'quick-start-btn secondary',
+			text: 'QUIZ 测验'
+		});
+		btnQuiz.addEventListener('click', () => {
+			this.switchToPage('learning');
+			this.learningState = 'quiz-list';
+			this.render();
+		});
+	}
+
+	/**
+	 * 侧边视图内弹层：确认整理当前笔记
+	 */
+	private showOrganizeCurrentNotePrompt(): void {
+		const activeFile = this.plugin.app.workspace.getActiveFile();
+		if (!(activeFile instanceof TFile) || activeFile.extension !== 'md') {
+			new Notice('请先打开一个 Markdown 笔记');
+			return;
+		}
+
+		// 创建侧边内嵌弹层（仅覆盖本视图）
+		const overlay = this.containerEl.createDiv({ cls: 'side-modal-overlay' });
+		const card = overlay.createDiv({ cls: 'side-modal-card' });
+
+		card.createEl('h3', { text: 'AI 整理笔记' });
+
+		const msg = card.createDiv({ cls: 'side-modal-message' });
+		msg.appendText('确认整理当前[');
+		msg.createEl('strong', { text: activeFile.basename });
+		msg.appendText(']笔记');
+
+		const actions = card.createDiv({ cls: 'side-modal-actions' });
+		const cancelBtn = actions.createEl('button', { text: '取消' });
+		const okBtn = actions.createEl('button', { text: '确认整理', cls: 'mod-cta' });
+
+		cancelBtn.addEventListener('click', () => {
+			overlay.detach();
+		});
+
+		okBtn.addEventListener('click', () => {
+			overlay.detach();
+			this.plugin.organizeNote(activeFile);
+		});
+
+		// 点击遮罩空白处关闭
+		overlay.addEventListener('click', (e: MouseEvent) => {
+			if (e.target === overlay) overlay.detach();
+		});
 	}
 
 	/**
