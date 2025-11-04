@@ -1,6 +1,8 @@
 # 思序 (Notebook LLM)
 
 面向 Obsidian 的智能学习工作流插件：将“AI 笔记整理 + 组合汇总 + Quiz 测验 + 闪卡复习 + 学习路径与画像”整合为一体，统一任务队列与多模型接入，帮助你把零散资料沉淀为体系化知识。
+![](http://notenote.top/20251104155652219.jpeg)
+
 
 详细教程文档: 
 
@@ -11,7 +13,7 @@ https://uqdcpiio07.feishu.cn/share/base/form/shrcnNxR4XnLHCteXPFfdxvKlpb?iframeF
 
 用户交流QQ群: 1043587681
 
-![概览与面板](image.png)
+
 
 ## 功能特性
 
@@ -47,19 +49,34 @@ https://uqdcpiio07.feishu.cn/share/base/form/shrcnNxR4XnLHCteXPFfdxvKlpb?iframeF
 ### 整理当前笔记
 - 命令面板执行“整理当前笔记”（`organize-current-note`），或在文件/编辑器右键使用“AI 整理笔记”。
 - 进度显示在状态栏；生成的新文件会自动打开（文件名模板默认：`{name}_AI整理`）。
+![](http://notenote.top/20251104155840069.jpeg)
 
 ### 多文档组合整理
 - 在文件/编辑器右键“添加到待整理列表”，或拖入组合视图。
 - 左侧功能区图标或命令“打开组合笔记侧边栏”（`open-combine-notes-view`）。
 - 一键“组合整理”输出 `组合笔记_YYYY-MM-DD.md` 到配置的 `combineNotesDir`（为空则存放在库根）。
+![](http://notenote.top/20251104155934732.jpeg)
 
 ### 生成并完成 Quiz
 - 学习中心内为当前笔记生成试题，内含题目导航/计时/进度条。
 - 交卷后自动 AI 评分，结果写入 `resultDir`（默认 `quiz/results`）。
 
+![](http://notenote.top/20251104140119346.jpeg)
+
+![](http://notenote.top/20251104140925219.jpeg)
+
 ### 闪卡学习
 - 从笔记快速生成卡组，或合并现有卡组。
-- 支持 FSRS/SM-2 调度、每日新卡/复习配额与总体掌握率统计。
+- 支持 FSRS调度、每日新卡/复习配额与总体掌握率统计。
+
+![](http://notenote.top/20251104133259704.jpeg)
+
+![](http://notenote.top/20251104133312180.jpeg)
+
+### 学点什么(beta)
+- 支持输入话题, 自动生成一系列学习文档
+
+![](http://notenote.top/20251104142235651.jpeg)
 
 ## 设置与配置（设置 → SiXu 设置）
 
