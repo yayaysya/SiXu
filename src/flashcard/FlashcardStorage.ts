@@ -1,6 +1,6 @@
 import { App, TFile, Notice } from 'obsidian';
 import { Flashcard, FlashcardDeck } from './types';
-import { SM2Algorithm } from './SM2Algorithm';
+import { FSRSAlgorithm } from './FSRSAlgorithm';
 
 /**
  * 闪卡存储管理器
@@ -97,9 +97,8 @@ export class FlashcardStorage {
 					createdAt: cardData?.createdAt || now,
 					updatedAt: cardData?.updatedAt || now,
 					learning: cardData?.learning || {
-						easeFactor: 2.5,
-						interval: 0,
-						repetitions: 0,
+						stability: 0.6,
+						difficulty: 5.0,
 						nextReview: now,
 						status: 'new'
 					},
@@ -222,9 +221,8 @@ export class FlashcardStorage {
 
 			content += `### Learning State\n\n`;
 			content += `- **Status:** ${card.learning.status}\n`;
-			content += `- **Ease Factor:** ${card.learning.easeFactor}\n`;
-			content += `- **Interval:** ${card.learning.interval} days\n`;
-			content += `- **Repetitions:** ${card.learning.repetitions}\n`;
+			content += `- **Difficulty:** ${card.learning.difficulty}\n`;
+			content += `- **Stability:** ${card.learning.stability} days\n`;
 			content += `- **Next Review:** ${new Date(card.learning.nextReview).toLocaleString('zh-CN')} (${card.learning.nextReview})\n`;
 			if (card.learning.lastReview !== undefined) {
 				content += `- **Last Review:** ${new Date(card.learning.lastReview).toLocaleString('zh-CN')} (${card.learning.lastReview})\n`;
@@ -371,9 +369,8 @@ export class FlashcardStorage {
 			const cardData: Partial<Flashcard> = {
 				id: cardId,
 				learning: {
-					easeFactor: 2.5,
-					interval: 0,
-					repetitions: 0,
+					stability: 0.6,
+					difficulty: 5.0,
 					nextReview: Date.now(),
 					status: 'new'
 				},
@@ -408,15 +405,14 @@ export class FlashcardStorage {
 							case 'Status':
 								cardData.learning!.status = value as any;
 								break;
-							case 'Ease Factor':
-								cardData.learning!.easeFactor = parseFloat(value);
-								break;
-							case 'Interval':
-								cardData.learning!.interval = parseInt(value);
-								break;
-							case 'Repetitions':
-								cardData.learning!.repetitions = parseInt(value);
-								break;
+						case 'Difficulty':
+							cardData.learning!.difficulty = parseFloat(value);
+							break;
+						case 'Stability':
+							// 允许行内为 "X days" 或纯数字
+							const sMatch = value.match(/([\d.]+)/);
+							if (sMatch) cardData.learning!.stability = parseFloat(sMatch[1]);
+							break;
 							case 'Next Review':
 								const nextMatch = value.match(/\((\d+)\)/);
 								if (nextMatch) {
@@ -569,16 +565,21 @@ export class FlashcardStorage {
 		}
 	}
 
-	async saveDeck(deck: FlashcardDeck, cards: Flashcard[]): Promise<void> {
-		await this.ensureDirectory();
+    async saveDeck(deck: FlashcardDeck, cards: Flashcard[]): Promise<void> {
+        await this.ensureDirectory();
 
-		// 生成文件路径
-		const contentPath = `${this.flashcardDir}/deck_${deck.id}.md`;
-		const dataPath = `${this.flashcardDir}/deck_${deck.id}_data.md`;
+        // 生成文件路径
+        const contentPath = `${this.flashcardDir}/deck_${deck.id}.md`;
+        const dataPath = `${this.flashcardDir}/deck_${deck.id}_data.md`;
 
-		// 生成 Markdown 内容
-		const contentMarkdown = this.generateDeckMarkdown(deck, cards);
-		const dataMarkdown = this.generateDataMarkdown(deck, cards);
+        // 统一以传入的 cards 作为真实来源，强制同步统计与卡片ID，避免不一致
+        deck.cardIds = cards.map(c => c.id);
+        deck.stats = this.calculateDeckStats(cards);
+        deck.updatedAt = Date.now();
+
+        // 生成 Markdown 内容
+        const contentMarkdown = this.generateDeckMarkdown(deck, cards);
+        const dataMarkdown = this.generateDataMarkdown(deck, cards);
 
 		try {
 			// 保存内容文件
@@ -646,24 +647,22 @@ export class FlashcardStorage {
 			throw new Error('卡片不存在');
 		}
 
-		// 使用 SM-2 算法计算新参数
-		const result = SM2Algorithm.calculateNextReview(
-			card.learning.easeFactor,
-			card.learning.repetitions,
-			card.learning.interval,
-			rating
+		// FSRS：根据上次复习间隔计算保持率，更新稳定度/难度
+		const now = Date.now();
+		const elapsedDays = card.learning.lastReview
+			? Math.max(0, (now - card.learning.lastReview) / (24 * 60 * 60 * 1000))
+			: 0;
+		const upd = FSRSAlgorithm.update(
+			{ stability: card.learning.stability, difficulty: card.learning.difficulty },
+			rating,
+			elapsedDays
 		);
 
-		// 更新卡片学习状态
-		card.learning.easeFactor = result.newEaseFactor;
-		card.learning.interval = result.newInterval;
-		card.learning.repetitions = result.newRepetitions;
-		card.learning.lastReview = Date.now();
-		card.learning.nextReview = SM2Algorithm.calculateNextReviewTime(result.newInterval);
-		card.learning.status = SM2Algorithm.determineCardStatus(
-			result.newRepetitions,
-			result.newInterval
-		);
+		card.learning.stability = upd.stability;
+		card.learning.difficulty = upd.difficulty;
+		card.learning.lastReview = now;
+		card.learning.nextReview = FSRSAlgorithm.calculateNextReviewTime(upd.intervalDays);
+		card.learning.status = FSRSAlgorithm.determineCardStatus(upd.stability, upd.intervalDays);
 		card.updatedAt = Date.now();
 
 		// 添加学习记录

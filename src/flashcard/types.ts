@@ -32,14 +32,13 @@ export interface Flashcard {
 	updatedAt: number;           // 更新时间
 
 	// 学习状态（SM-2算法）
-	learning: {
-		easeFactor: number;      // 难度因子 (初始2.5)
-		interval: number;        // 复习间隔(天)
-		repetitions: number;     // 连续正确次数
-		nextReview: number;      // 下次复习时间戳
-		lastReview?: number;     // 上次复习时间戳
-		status: CardStatus;      // 学习状态
-	};
+    learning: {
+        stability: number;       // 稳定度 S（天）
+        difficulty: number;      // 难度 D（1-10，越大越难）
+        nextReview: number;      // 下次复习时间戳
+        lastReview?: number;     // 上次复习时间戳
+        status: CardStatus;      // 学习状态
+    };
 
 	// 学习记录
 	reviewHistory: ReviewRecord[];

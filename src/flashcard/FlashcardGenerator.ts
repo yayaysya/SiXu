@@ -1,7 +1,7 @@
 import { App, TFile } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { Flashcard, FlashcardDeck, AIFlashcardResponse, FlashcardGenerationOptions } from './types';
-import { SM2Algorithm } from './SM2Algorithm';
+import { FSRSAlgorithm } from './FSRSAlgorithm';
 import { TextProcessor } from '../processors/text';
 import { DocumentSplitter, SplitChunk } from '../utils/DocumentSplitter';
 import { BatchProcessor } from '../utils/BatchProcessor';
@@ -42,7 +42,7 @@ export class FlashcardGenerator {
 				tags: gc.tags || [],
 				createdAt: Date.now(),
 				updatedAt: Date.now(),
-				learning: SM2Algorithm.initializeCard(),
+            		learning: FSRSAlgorithm.initializeCard(),
 				reviewHistory: []
 			};
 		});
@@ -177,7 +177,7 @@ export class FlashcardGenerator {
 					tags: gc.tags || [],
 					createdAt: Date.now(),
 					updatedAt: Date.now(),
-					learning: SM2Algorithm.initializeCard(),
+                learning: FSRSAlgorithm.initializeCard(),
 					reviewHistory: []
 				};
 			});

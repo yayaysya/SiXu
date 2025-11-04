@@ -23,7 +23,7 @@ export class NotebookLLMSettingTab extends PluginSettingTab {
 		// 添加插件特定的类名，避免样式污染
 		containerEl.addClass('notebook-llm-settings');
 
-		containerEl.createEl('h2', { text: 'Notebook LLM 设置' });
+		containerEl.createEl('h2', { text: 'SiXu 设置' });
 
 		// 文本模型配置（包含内联的 API 配置）
 		this.displayTextModelSettings(containerEl);

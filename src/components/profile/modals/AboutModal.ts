@@ -64,11 +64,10 @@ export class AboutModal extends Modal {
 
         const titleSection = logoSection.createDiv({ cls: 'title-section' });
         const productName = titleSection.createDiv({ cls: 'product-name' });
-        productName.setText('思序 (Notebook LLM)');
+        productName.setText('思序');
 
         const productTagline = titleSection.createDiv({ cls: 'product-tagline' });
         productTagline.setText('AI 驱动的智能学习生态系统');
-
         const version = titleSection.createDiv({ cls: 'product-version' });
         version.setText('v1.0.0');
     }

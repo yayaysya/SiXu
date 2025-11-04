@@ -1485,6 +1485,12 @@ export class CombineNotesView extends ItemView {
                 onOpen() {
                     this.modalEl.addClass('exam-confirm-modal');
                     this.modalEl.addClass('profile-modal');
+
+                    // 移除 Obsidian Modal 默认的右上角关闭按钮与空标题栏，避免出现两个 X 和顶部分割线
+                    this.modalEl.querySelector('.modal-close-button')?.remove();
+                    const defaultHeader = this.modalEl.querySelector('.modal-header');
+                    if (defaultHeader) defaultHeader.remove();
+
                     const container = this.modalEl.createDiv({ cls: 'help-modal-container' });
 
                     // 头部
@@ -3728,17 +3734,21 @@ export class CombineNotesView extends ItemView {
 					const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
 
 					// 显示确认对话框
-					const confirmModal = new ConfirmFlashcardsModal(
-						this.app,
-						result.cards,
-						async (selectedCards: Flashcard[]) => {
-							if (selectedCards.length > 0) {
-								await storage.saveDeck(result.deck, selectedCards);
-								new Notice(`✅ 成功创建卡组，包含 ${selectedCards.length} 张卡片`);
-								this.render(); // 刷新列表
-							}
-						}
-					);
+                    const confirmModal = new ConfirmFlashcardsModal(
+                        this.app,
+                        result.cards,
+                        async (selectedCards: Flashcard[]) => {
+                            if (selectedCards.length > 0) {
+                                // 同步选择结果到 deck，再保存
+                                result.deck.cardIds = selectedCards.map(c => c.id);
+                                result.deck.stats.total = selectedCards.length;
+                                result.deck.stats.new = selectedCards.length;
+                                await storage.saveDeck(result.deck, selectedCards);
+                                new Notice(`✅ 成功创建卡组，包含 ${selectedCards.length} 张卡片`);
+                                this.render(); // 刷新列表
+                            }
+                        }
+                    );
 					confirmModal.open();
 
 				} catch (error) {

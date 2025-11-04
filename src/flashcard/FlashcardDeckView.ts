@@ -766,6 +766,9 @@ class ConfirmFlashcardsModal extends Modal {
 			this.renderCardItem(listContainer, card, index);
 		});
 
+		// 拦截右上角关闭（X）与 Esc 关闭，弹出确认
+		this.interceptCloseWithConfirm();
+
 		// 按钮
 		const buttonGroup = contentEl.createDiv({ cls: 'modal-button-container' });
 		buttonGroup.style.cssText = 'display: flex; gap: 10px; margin-top: 20px; justify-content: space-between;';
@@ -799,6 +802,34 @@ class ConfirmFlashcardsModal extends Modal {
 			this.onConfirm(selected);
 			this.close();
 		});
+	}
+
+	// 拦截 Modal 的关闭操作，确认后才真正关闭
+	private interceptCloseWithConfirm(): void {
+		const closeBtn = this.modalEl.querySelector('.modal-close-button');
+		if (closeBtn) {
+			closeBtn.addEventListener('click', (e: Event) => {
+				(e as any).stopImmediatePropagation?.();
+				e.stopPropagation();
+				e.preventDefault();
+				new ConfirmExitModal(this.app, '放弃保存这些闪卡吗？', '取消', '确认放弃', () => {
+					this.close();
+				}).open();
+			}, { capture: true });
+		}
+
+		const onKeydown = (ev: KeyboardEvent) => {
+			if (ev.key === 'Escape') {
+				ev.preventDefault();
+				ev.stopPropagation();
+				new ConfirmExitModal(this.app, '放弃保存这些闪卡吗？', '取消', '确认放弃', () => {
+					window.removeEventListener('keydown', onKeydown, true);
+					this.close();
+				}).open();
+			}
+		};
+		// 捕获阶段优先处理 Esc
+		window.addEventListener('keydown', onKeydown, true);
 	}
 
 	private renderCardItem(container: HTMLElement, card: Flashcard, index: number): void {
@@ -846,6 +877,44 @@ class ConfirmFlashcardsModal extends Modal {
 			const sourceEl = content.createDiv({ cls: 'flashcard-source' });
 			sourceEl.createEl('small', { text: `来源：${card.sourceSection}` });
 		}
+	}
+
+	onClose(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+/** 简单确认弹框（用于确认关闭/放弃） */
+class ConfirmExitModal extends Modal {
+	private message: string;
+	private cancelText: string;
+	private okText: string;
+	private onOk: () => void;
+
+	constructor(app: App, message: string, cancelText: string, okText: string, onOk: () => void) {
+		super(app);
+		this.message = message;
+		this.cancelText = cancelText;
+		this.okText = okText;
+		this.onOk = onOk;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		this.modalEl.addClass('side-modal-card');
+		// 标题
+		contentEl.createEl('h3', { text: '确认操作' });
+		// 信息
+		const msg = contentEl.createDiv({ cls: 'side-modal-message' });
+		msg.setText(this.message);
+		// 按钮
+		const actions = contentEl.createDiv({ cls: 'side-modal-actions' });
+		const cancelBtn = actions.createEl('button', { text: this.cancelText });
+		const okBtn = actions.createEl('button', { text: this.okText, cls: 'mod-cta' });
+		cancelBtn.addEventListener('click', () => this.close());
+		okBtn.addEventListener('click', () => { this.onOk(); this.close(); });
 	}
 
 	onClose(): void {
