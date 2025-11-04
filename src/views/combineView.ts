@@ -3017,12 +3017,17 @@ export class CombineNotesView extends ItemView {
 	 * 选择一个 Markdown 文件作为 Quiz 源
 	 */
 	private showFilePickerModal(): Promise<TFile | null> {
-		return new Promise((resolve) => {
-			const allFiles = this.app.vault.getFiles().filter(f => f.extension === 'md');
-			const modal = new FilePickerModal(this.app, allFiles, (file) => resolve(file));
-			modal.open();
-		});
-	}
+        return new Promise((resolve) => {
+            const allFiles = this.app.vault.getFiles().filter(f => {
+                if (f.extension !== 'md') return false;
+                const p = f.path.toLowerCase();
+                if (p.endsWith('.excalidraw.md')) return false; // 排除 Excalidraw 文件
+                return true;
+            });
+            const modal = new FilePickerModal(this.app, allFiles, (file) => resolve(file));
+            modal.open();
+        });
+    }
 
 	/**
 	 * 渲染Quiz列表页
@@ -3670,10 +3675,11 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 打开创建卡组对话框
 	 */
-	private openCreateDeckModal(): void {
-		const modal = new CreateDeckModal(
-			this.app,
-			async (deckName: string, sourceNote: string, cardCount: number) => {
+    private openCreateDeckModal(): void {
+        const modal = new CreateDeckModal(
+            this.app,
+            this.plugin,
+            async (deckName: string, sourceNote: string, cardCount: number) => {
 				try {
 					// 重置取消标志
 					this.isCancelled = false;
@@ -4881,7 +4887,7 @@ class FilePickerModal extends Modal {
         filtered.slice(0, 200).forEach(file => {
             const item = this.listContainer.createDiv({ cls: 'file-list-item' });
             item.createDiv({ cls: 'file-name', text: file.basename });
-            item.createDiv({ cls: 'file-path', text: file.path });
+            // 仅展示文件名，不展示路径
             item.addEventListener('click', () => { this.selected = file; this.close(); });
         });
     }

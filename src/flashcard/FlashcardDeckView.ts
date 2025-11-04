@@ -268,11 +268,11 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 	/**
 	 * 显示创建卡组对话框
 	 */
-	private showCreateDeckModal(): void {
-		new CreateDeckModal(this.app, async (deckName, sourceNote, cardCount) => {
-			await this.createDeck(deckName, sourceNote, cardCount);
-		}).open();
-	}
+    private showCreateDeckModal(): void {
+        new CreateDeckModal(this.app, this.plugin, async (deckName, sourceNote, cardCount) => {
+            await this.createDeck(deckName, sourceNote, cardCount);
+        }).open();
+    }
 
 	/**
 	 * 创建卡组
@@ -428,15 +428,18 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
  * 创建卡组对话框
  */
 class CreateDeckModal extends Modal {
-	private onSubmit: (deckName: string, sourceNote: string, cardCount: number) => void;
+    private onSubmit: (deckName: string, sourceNote: string, cardCount: number) => void;
+    private plugin: NotebookLLMPlugin;
 
-	constructor(
-		app: App,
-		onSubmit: (deckName: string, sourceNote: string, cardCount: number) => void
-	) {
-		super(app);
-		this.onSubmit = onSubmit;
-	}
+    constructor(
+        app: App,
+        plugin: NotebookLLMPlugin,
+        onSubmit: (deckName: string, sourceNote: string, cardCount: number) => void
+    ) {
+        super(app);
+        this.plugin = plugin;
+        this.onSubmit = onSubmit;
+    }
 
 	onOpen(): void {
 		const { contentEl } = this;
@@ -626,13 +629,36 @@ class CreateDeckModal extends Modal {
 		contentEl.empty();
 	}
 
-	private async selectNoteFile(): Promise<TFile | null> {
-		return new Promise((resolve) => {
-			const allFiles = this.app.vault.getMarkdownFiles();
-			const modal = new FilePickerModal(this.app, allFiles, (file) => resolve(file));
-			modal.open();
-		});
-	}
+    private async selectNoteFile(): Promise<TFile | null> {
+        return new Promise((resolve) => {
+            const norm = (s: string) => (s || '').replace(/^\/+|\/+$/g, '');
+            const inDir = (p: string, dir: string) => {
+                if (!dir) return false;
+                const nd = norm(dir);
+                if (!nd) return false;
+                return p === nd || p.startsWith(nd + '/');
+            };
+
+            const quizDir = norm(this.plugin.settings.quizDir || 'quiz');
+            const resultDir = norm(this.plugin.settings.resultDir || 'quiz/results');
+            const flashDir = norm(this.plugin.settings.flashcard?.deckDir || 'flashcards');
+            const debugDir = 'sixu_debugger';
+
+            const allFiles = this.app.vault.getMarkdownFiles().filter(f => {
+                const p = f.path.replace(/^\/+/, '');
+                const lp = p.toLowerCase();
+                if (lp.endsWith('.excalidraw.md')) return false; // 过滤 Excalidraw 笔记
+                if (inDir(p, quizDir)) return false;
+                if (inDir(p, resultDir)) return false;
+                if (inDir(p, flashDir)) return false;
+                if (inDir(p, debugDir)) return false;
+                return true;
+            });
+
+            const modal = new FilePickerModal(this.app, allFiles, (file) => resolve(file));
+            modal.open();
+        });
+    }
 }
 
 /**
@@ -688,12 +714,12 @@ class FilePickerModal extends Modal {
 		// 按最近修改时间倒序
 		filtered.sort((a, b) => b.stat.mtime - a.stat.mtime);
 
-		filtered.slice(0, 200).forEach(file => {
-			const item = this.listContainer.createDiv({ cls: 'file-list-item' });
-			item.createDiv({ cls: 'file-name', text: file.basename });
-			item.createDiv({ cls: 'file-path', text: file.path });
-			item.addEventListener('click', () => { this.selected = file; this.close(); });
-		});
+			filtered.slice(0, 200).forEach(file => {
+				const item = this.listContainer.createDiv({ cls: 'file-list-item' });
+				item.createDiv({ cls: 'file-name', text: file.basename });
+				// 仅展示文件名，不展示路径
+				item.addEventListener('click', () => { this.selected = file; this.close(); });
+			});
 	}
 
 	onClose(): void {
@@ -792,6 +818,17 @@ class ConfirmFlashcardsModal extends Modal {
 			this.onOpen();
 		});
 
+		// 编辑按钮（紧挨复选框）
+		const editBtn = item.createEl('button', { text: '编辑', cls: 'flashcard-edit-btn' });
+		editBtn.addEventListener('click', (e) => {
+			e.stopPropagation();
+			new EditFlashcardModal(this.app, card.question, card.answer, (newQ, newA) => {
+				card.question = newQ;
+				card.answer = newA;
+				this.onOpen();
+			}).open();
+		});
+
 		const content = item.createDiv({ cls: 'flashcard-content' });
 
 		// 问题
@@ -809,6 +846,65 @@ class ConfirmFlashcardsModal extends Modal {
 			const sourceEl = content.createDiv({ cls: 'flashcard-source' });
 			sourceEl.createEl('small', { text: `来源：${card.sourceSection}` });
 		}
+	}
+
+	onClose(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+/**
+ * 编辑单张闪卡内容（Q/A）
+ */
+class EditFlashcardModal extends Modal {
+	private initQ: string;
+	private initA: string;
+	private onSubmit: (question: string, answer: string) => void;
+
+	constructor(app: App, question: string, answer: string, onSubmit: (question: string, answer: string) => void) {
+		super(app);
+		this.initQ = question;
+		this.initA = answer;
+		this.onSubmit = onSubmit;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.empty();
+		this.modalEl.addClass('edit-flashcard-modal');
+		this.modalEl.style.maxWidth = '720px';
+
+		contentEl.createEl('h3', { text: '编辑闪卡' });
+
+		// 问题
+		const qGroup = contentEl.createDiv({ cls: 'setting-item' });
+		qGroup.createDiv({ text: '问题 (Q)', cls: 'setting-item-name' });
+		const qInput = qGroup.createEl('textarea');
+		qInput.value = this.initQ;
+		qInput.rows = 3; // 降低高度
+		qInput.style.width = '100%';
+
+		// 答案
+		const aGroup = contentEl.createDiv({ cls: 'setting-item' });
+		aGroup.createDiv({ text: '答案 (A)', cls: 'setting-item-name' });
+		const aInput = aGroup.createEl('textarea');
+		aInput.value = this.initA;
+		aInput.rows = 4; // 降低高度
+		aInput.style.width = '100%';
+
+		// 按钮
+		const btns = contentEl.createDiv({ cls: 'modal-button-container' });
+		const cancelBtn = btns.createEl('button', { text: '取消' });
+		const okBtn = btns.createEl('button', { text: '确认', cls: 'mod-cta' });
+
+		cancelBtn.addEventListener('click', () => this.close());
+		okBtn.addEventListener('click', () => {
+			const newQ = qInput.value.trim();
+			const newA = aInput.value.trim();
+			this.onSubmit(newQ, newA);
+			this.close();
+		});
 	}
 
 	onClose(): void {

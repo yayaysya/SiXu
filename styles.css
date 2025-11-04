@@ -6102,3 +6102,28 @@ button.mod-cta:hover {
 .quiz-tile .tile-graphic-icon svg { width: 56px; height: 56px; }
 
 /* 保持单列布局，无需响应式改列数 */
+.flashcard-edit-btn {
+    margin-left: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    cursor: pointer;
+}
+.flashcard-edit-btn:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+}
+
+/* 编辑闪卡弹框中文本域：降低高度并默认显示边框 */
+.edit-flashcard-modal textarea {
+    width: 100%;
+    min-height: 56px;
+    border: 1px solid var(--background-modifier-border) !important;
+    border-radius: 8px;
+    background: var(--background-primary);
+    padding: 8px 10px;
+    resize: vertical;
+}
