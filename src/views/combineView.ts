@@ -1989,6 +1989,30 @@ export class CombineNotesView extends ItemView {
 	}
 
 	/**
+	 * 侧边视图内弹层：确认删除卡组
+	 */
+	private showDeleteDeckConfirm(deckName: string): Promise<boolean> {
+		return new Promise((resolve) => {
+			const overlay = this.containerEl.createDiv({ cls: 'side-modal-overlay' });
+			const card = overlay.createDiv({ cls: 'side-modal-card' });
+			card.createEl('h3', { text: '删除闪卡组' });
+			const msg = card.createDiv({ cls: 'side-modal-message' });
+			msg.appendText('确认删除[');
+			msg.createEl('strong', { text: deckName });
+			msg.appendText(']卡组？此操作不可恢复');
+
+			const actions = card.createDiv({ cls: 'side-modal-actions' });
+			const cancelBtn = actions.createEl('button', { text: '取消' });
+			const okBtn = actions.createEl('button', { text: '确认删除', cls: 'mod-cta' });
+
+			const cleanup = (result: boolean) => { overlay.detach(); resolve(result); };
+			cancelBtn.addEventListener('click', () => cleanup(false));
+			okBtn.addEventListener('click', () => cleanup(true));
+			overlay.addEventListener('click', (e: MouseEvent) => { if (e.target === overlay) cleanup(false); });
+		});
+	}
+
+	/**
 	 * 渲染最近情况区域
 	 */
 	private async renderRecentSection(container: HTMLElement): Promise<void> {
@@ -3493,6 +3517,8 @@ export class CombineNotesView extends ItemView {
         const deleteBtn = actions.createEl('button', { text: '删除', cls: 'deck-btn' });
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
+            const confirmed = await this.showDeleteDeckConfirm(deck.name);
+            if (!confirmed) return;
             await this.deleteDeck(deck.id, storage);
         });
     }

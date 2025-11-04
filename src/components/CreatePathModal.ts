@@ -34,9 +34,8 @@ export class CreatePathModal extends Modal {
 		contentEl.createEl('h2', { text: '🗺️ 创建学习路径', cls: 'modal-title' });
 		contentEl.createEl('p', { text: '告诉我您想学习什么，AI将为您生成完整的学习计划', cls: 'modal-subtitle' });
 
-		// 主题输入
-		const topicContainer = contentEl.createDiv({ cls: 'setting-item' });
-		new Setting(topicContainer)
+		// 主题输入（避免多余的 setting-item 容器，直接挂载到 contentEl）
+		new Setting(contentEl)
 			.setName('学习主题 *')
 			.setDesc('您想要学习的主题或技能（例如：CSS语法、Python编程、机器学习入门）')
 			.addText(text => {
@@ -104,9 +103,8 @@ export class CreatePathModal extends Modal {
 			});
 		});
 
-		// 背景知识输入
-		const backgroundContainer = contentEl.createDiv({ cls: 'setting-item' });
-		new Setting(backgroundContainer)
+		// 背景知识输入（直接挂载到 contentEl，避免嵌套 setting-item）
+		new Setting(contentEl)
 			.setName('背景知识（选填）')
 			.setDesc('描述您的相关背景或基础知识，AI将据此调整内容难度')
 			.addTextArea(text => {
@@ -117,9 +115,8 @@ export class CreatePathModal extends Modal {
 				text.inputEl.style.resize = 'vertical';
 			});
 
-		// 目标目录设置
-		const directoryContainer = contentEl.createDiv({ cls: 'setting-item' });
-		new Setting(directoryContainer)
+		// 目标目录设置（直接挂载到 contentEl，避免嵌套 setting-item）
+		new Setting(contentEl)
 			.setName('保存位置')
 			.setDesc('学习路径将保存在此目录下')
 			.addText(text => {
