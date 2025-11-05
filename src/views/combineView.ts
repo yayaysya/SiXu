@@ -97,6 +97,8 @@ export class CombineNotesView extends ItemView {
 	private userAnswers: Map<string, string | string[]> = new Map();
 	private currentQuizResults: QuizQuestionResult[] = [];
 	private currentResultFile: TFile | null = null;
+	private quizSelectionMode: boolean = false;
+	private selectedQuizPaths: Set<string> = new Set();
 
 	// Flashcard相关状态
 	private selectedDeckIds: Set<string> = new Set();
@@ -3023,17 +3025,42 @@ export class CombineNotesView extends ItemView {
 	 * 选择一个 Markdown 文件作为 Quiz 源
 	 */
 	private showFilePickerModal(): Promise<TFile | null> {
-        return new Promise((resolve) => {
-            const allFiles = this.app.vault.getFiles().filter(f => {
-                if (f.extension !== 'md') return false;
-                const p = f.path.toLowerCase();
-                if (p.endsWith('.excalidraw.md')) return false; // 排除 Excalidraw 文件
-                return true;
-            });
-            const modal = new FilePickerModal(this.app, allFiles, (file) => resolve(file));
-            modal.open();
-        });
-    }
+		return new Promise((resolve) => {
+			const allFiles = this.app.vault.getFiles().filter(f => {
+				if (f.extension !== 'md') return false;
+				const p = f.path.toLowerCase();
+				if (p.endsWith('.excalidraw.md')) return false; // 排除 Excalidraw 文件
+				return true;
+			});
+			const modal = new FilePickerModal(this.app, allFiles, (file) => resolve(file));
+			modal.open();
+		});
+	}
+
+	private resetQuizSelection(): void {
+		this.selectedQuizPaths.clear();
+	}
+
+	private exitQuizSelectionMode(): void {
+		this.quizSelectionMode = false;
+		this.resetQuizSelection();
+	}
+
+	private toggleQuizSelectionMode(): void {
+		this.quizSelectionMode = !this.quizSelectionMode;
+		if (!this.quizSelectionMode) {
+			this.resetQuizSelection();
+		}
+		this.render();
+	}
+
+	private setQuizSelected(path: string, selected: boolean): void {
+		if (selected) {
+			this.selectedQuizPaths.add(path);
+		} else {
+			this.selectedQuizPaths.delete(path);
+		}
+	}
 
 	/**
 	 * 渲染Quiz列表页
@@ -3050,12 +3077,32 @@ export class CombineNotesView extends ItemView {
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
 			this.learningState = 'quiz-hub';
+			this.exitQuizSelectionMode();
 			this.render();
 		});
 		titleRow.createEl('h2', { text: '试题列表', cls: 'page-title' });
+		const manageBtn = titleRow.createEl('button', {
+			cls: this.quizSelectionMode ? 'quiz-manage-btn active' : 'quiz-manage-btn',
+			text: this.quizSelectionMode ? '退出管理' : '批量管理'
+		});
+		manageBtn.addEventListener('click', () => this.toggleQuizSelectionMode());
 
 		// 第二行：副标题
 		header.createEl('p', { text: '选择一套试题开始练习', cls: 'page-subtitle' });
+
+		if (this.quizSelectionMode) {
+			const bulkBar = header.createDiv({ cls: 'quiz-bulk-toolbar' });
+			bulkBar.createSpan({
+				cls: 'quiz-bulk-info',
+				text: `已选择 ${this.selectedQuizPaths.size} 套试题`
+			});
+			const bulkDeleteBtn = bulkBar.createEl('button', {
+				cls: 'quiz-bulk-delete-btn',
+				text: '删除所选'
+			});
+			bulkDeleteBtn.disabled = this.selectedQuizPaths.size === 0;
+			bulkDeleteBtn.addEventListener('click', () => this.handleBulkQuizDelete());
+		}
 
 		// Quiz列表容器
 		const quizList = listPage.createDiv({ cls: 'quiz-cards-container' });
@@ -3069,7 +3116,17 @@ export class CombineNotesView extends ItemView {
 			!file.basename.includes('结果')
 		);
 
+		if (this.quizSelectionMode) {
+			const validPaths = new Set(quizFiles.map(f => f.path));
+			for (const path of Array.from(this.selectedQuizPaths)) {
+				if (!validPaths.has(path)) {
+					this.selectedQuizPaths.delete(path);
+				}
+			}
+		}
+
 		if (quizFiles.length === 0) {
+			this.exitQuizSelectionMode();
 			quizList.createDiv({
 				cls: 'empty-state',
 				text: '暂无Quiz试题，请先在整理页面生成试题'
@@ -3087,7 +3144,38 @@ export class CombineNotesView extends ItemView {
 	 * 渲染单个Quiz卡片（学习中心版本）
 	 */
 	private async renderQuizCardInLearning(container: HTMLElement, file: TFile): Promise<void> {
-		const card = container.createDiv({ cls: 'quiz-card' });
+		const row = container.createDiv({ cls: 'quiz-card-row' });
+		row.toggleClass('selection-mode', this.quizSelectionMode);
+
+		if (this.quizSelectionMode) {
+			const isSelected = this.selectedQuizPaths.has(file.path);
+			const selectWrap = row.createDiv({ cls: 'quiz-card-select-area' });
+			selectWrap.toggleClass('selected', isSelected);
+
+			const checkbox = selectWrap.createEl('input', {
+				type: 'checkbox',
+				cls: 'quiz-card-checkbox'
+			}) as HTMLInputElement;
+			checkbox.checked = isSelected;
+			checkbox.addEventListener('click', (event: MouseEvent) => event.stopPropagation());
+			checkbox.addEventListener('change', (event: Event) => {
+				const target = event.target as HTMLInputElement;
+				this.setQuizSelected(file.path, target.checked);
+				this.render();
+			});
+
+			selectWrap.addEventListener('click', (event: MouseEvent) => {
+				event.preventDefault();
+				if (event.target instanceof HTMLInputElement) return;
+				checkbox.checked = !checkbox.checked;
+				this.setQuizSelected(file.path, checkbox.checked);
+				this.render();
+			});
+		}
+
+		const card = row.createDiv({ cls: 'quiz-card' });
+
+		const header = card.createDiv({ cls: 'quiz-card-header' });
 
 		// 获取元数据
 		const metadata = this.app.metadataCache.getFileCache(file);
@@ -3108,7 +3196,7 @@ export class CombineNotesView extends ItemView {
 		}
 
 		// 标题
-		const title = card.createEl('h3', { cls: 'quiz-card-title' });
+		const title = header.createEl('h3', { cls: 'quiz-card-title' });
 		title.setText(frontmatter?.title || file.basename);
 
 		// 元信息
@@ -3176,7 +3264,93 @@ export class CombineNotesView extends ItemView {
                 await this.startQuiz(file);
             });
         }
+
+		const manageRow = actions.createDiv({ cls: 'quiz-card-actions-row' });
+		const deleteBtn = manageRow.createEl('button', {
+			cls: 'quiz-action-btn danger',
+			text: '删除试题'
+		});
+		deleteBtn.addEventListener('click', async (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			await this.handleSingleQuizDelete(file);
+		});
     }
+
+	private async handleSingleQuizDelete(file: TFile): Promise<void> {
+		const confirmed = await this.showConfirmDialog(
+			`确定删除试题 ${file.basename} 吗？此操作不可撤销。`,
+			'删除试题',
+			'删除',
+			'取消'
+		);
+		if (!confirmed) return;
+
+		try {
+			await this.app.vault.delete(file);
+			new Notice(`已删除试题 ${file.basename}`);
+		} catch (error) {
+			console.error('删除试题失败:', error);
+			const message = error instanceof Error ? error.message : String(error);
+			new Notice(`删除试题失败: ${message}`);
+			return;
+		}
+
+		this.selectedQuizPaths.delete(file.path);
+		this.learningState = 'quiz-list';
+		this.render();
+	}
+
+	private async handleBulkQuizDelete(): Promise<void> {
+		if (this.selectedQuizPaths.size === 0) {
+			new Notice('请先选择要删除的试题');
+			return;
+		}
+
+		const files: TFile[] = [];
+		for (const path of this.selectedQuizPaths) {
+			const abstract = this.app.vault.getAbstractFileByPath(path);
+			if (abstract instanceof TFile) {
+				files.push(abstract);
+			}
+		}
+
+		if (files.length === 0) {
+			this.exitQuizSelectionMode();
+			this.render();
+			return;
+		}
+
+		const confirmed = await this.showConfirmDialog(
+			`确定删除选中的 ${files.length} 套试题吗？此操作不可撤销。`,
+			'批量删除试题',
+			'删除',
+			'取消'
+		);
+		if (!confirmed) return;
+
+		const failedPaths: string[] = [];
+		for (const quizFile of files) {
+			try {
+				await this.app.vault.delete(quizFile);
+			} catch (error) {
+				console.error(`删除试题失败: ${quizFile.path}`, error);
+				failedPaths.push(quizFile.path);
+			}
+		}
+
+		if (failedPaths.length === 0) {
+			new Notice(`已删除 ${files.length} 套试题`);
+			this.exitQuizSelectionMode();
+		} else {
+			new Notice(`部分删除失败：${failedPaths.length}/${files.length} 条，请查看控制台详情`);
+			this.quizSelectionMode = true;
+			this.selectedQuizPaths = new Set(failedPaths);
+		}
+
+		this.learningState = 'quiz-list';
+		this.render();
+	}
 
     /**
      * 获取最近一次考试结果信息（分数与时间）
