@@ -19,6 +19,7 @@ export class FlashcardDeckView extends ItemView {
 	private decks: FlashcardDeck[] = [];
 	private sortMode: SortMode = 'time';
 	private selectedDeckIds: Set<string> = new Set();
+	private deckSelectionMode: boolean = false;
 	private progressCard: ProgressCard | null = null;
 	private isCancelled: boolean = false;
 
@@ -106,11 +107,7 @@ export class FlashcardDeckView extends ItemView {
 		// 卡组列表
 		this.renderDeckList(container);
 
-		// 多选操作栏
-		if (this.selectedDeckIds.size > 0) {
-			this.renderMultiSelectActions(container);
-		}
-	}
+}
 
 	/**
 	 * 渲染头部
@@ -143,6 +140,31 @@ export class FlashcardDeckView extends ItemView {
 			this.sortDecks();
 			this.render();
 		});
+
+		// 批量管理切换按钮（对齐 Quiz 列表交互）
+		const manageBtn = header.createEl('button', {
+			text: this.deckSelectionMode ? '退出管理' : '批量管理',
+			cls: this.deckSelectionMode ? 'quiz-manage-btn active' : 'quiz-manage-btn'
+		});
+		manageBtn.addEventListener('click', () => this.toggleDeckSelectionMode());
+
+		// 管理模式顶部工具条
+		if (this.deckSelectionMode) {
+			const bulkBar = header.createDiv({ cls: 'quiz-bulk-toolbar' });
+			const validIds = new Set(this.decks.map(d => d.id));
+			// 清洗无效选择
+			for (const id of Array.from(this.selectedDeckIds)) {
+				if (!validIds.has(id)) this.selectedDeckIds.delete(id);
+			}
+			bulkBar.createSpan({ cls: 'quiz-bulk-info', text: `已选择 ${this.selectedDeckIds.size} 个卡组` });
+
+			const mergeBtn = bulkBar.createEl('button', { text: '合并所选', cls: 'deck-btn primary' });
+			mergeBtn.addEventListener('click', () => this.handleBulkDeckMerge());
+
+			const deleteBtn = bulkBar.createEl('button', { text: '删除所选', cls: 'deck-btn' });
+			deleteBtn.disabled = this.selectedDeckIds.size === 0;
+			deleteBtn.addEventListener('click', () => this.handleBulkDeckDelete());
+		}
 	}
 
 	/**
@@ -151,12 +173,40 @@ export class FlashcardDeckView extends ItemView {
 	private renderDeckList(container: HTMLElement): void {
 		const list = container.createDiv({ cls: 'flashcard-deck-list' });
 
-		// 创建新卡组卡片（始终第一个）
-		this.renderCreateNewDeckCard(list);
+		// 创建新卡组卡片（始终第一个）——批量管理时隐藏，避免干扰
+		if (!this.deckSelectionMode) {
+			this.renderCreateNewDeckCard(list);
+		}
 
 		// 渲染已有卡组
 		this.decks.forEach(deck => {
-			this.renderDeckCard(list, deck);
+			// 在管理模式下，为每个卡片外包一层 row 容器以放置选择区
+			if (this.deckSelectionMode) {
+				const row = list.createDiv({ cls: 'quiz-card-row selection-mode' });
+				const isSelected = this.selectedDeckIds.has(deck.id);
+				const selectWrap = row.createDiv({ cls: 'quiz-card-select-area' });
+				selectWrap.toggleClass('selected', isSelected);
+				const checkbox = selectWrap.createEl('input', { type: 'checkbox', cls: 'quiz-card-checkbox' }) as HTMLInputElement;
+				checkbox.checked = isSelected;
+				checkbox.addEventListener('click', (e: MouseEvent) => e.stopPropagation());
+				checkbox.addEventListener('change', (e: Event) => {
+					const target = e.target as HTMLInputElement;
+					this.setDeckSelected(deck.id, target.checked);
+					this.render();
+				});
+				selectWrap.addEventListener('click', (e: MouseEvent) => {
+					e.preventDefault();
+					if (e.target instanceof HTMLInputElement) return;
+					checkbox.checked = !checkbox.checked;
+					this.setDeckSelected(deck.id, checkbox.checked);
+					this.render();
+				});
+
+				// 在 row 内渲染卡片
+				this.renderDeckCard(row, deck);
+			} else {
+				this.renderDeckCard(list, deck);
+			}
 		});
 	}
 
@@ -178,9 +228,7 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 	 */
 	private renderDeckCard(container: HTMLElement, deck: FlashcardDeck): void {
 		const isSelected = this.selectedDeckIds.has(deck.id);
-		const card = container.createDiv({
-			cls: (isSelected ? 'deck-card selected ' : 'deck-card ') + 'folder-card'
-		});
+		const card = container.createDiv({ cls: (isSelected ? 'deck-card selected ' : 'deck-card ') + 'folder-card' });
 
 		// 扁平瓷贴风格：仅保留主体 overlay，并应用色板类
 		const overlay = card.createDiv({ cls: `folder-overlay ${this.getTileColorClass(deck.id || deck.name)}` });
@@ -215,43 +263,20 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 			this.startStudy(deck);
 		});
 
-		const selectBtn = actions.createEl('button', { text: isSelected ? '✓ 已选' : '选择', cls: 'deck-btn' });
-		selectBtn.addEventListener('click', (e) => {
-			e.stopPropagation();
-			this.toggleDeckSelection(deck.id);
-		});
+		// 在批量管理模式下隐藏单独“选择”按钮，统一使用左侧复选框
+		if (!this.deckSelectionMode) {
+			const selectBtn = actions.createEl('button', { text: isSelected ? '✓ 已选' : '选择', cls: 'deck-btn' });
+			selectBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				this.toggleDeckSelection(deck.id);
+			});
+		}
 	}
 
 	/**
 	 * 渲染多选操作栏
 	 */
-	private renderMultiSelectActions(container: HTMLElement): void {
-		const actionsBar = container.createDiv({ cls: 'multi-select-actions' });
-
-		// 第一行：已选择 X 个卡组
-		const summaryRow = actionsBar.createDiv({ cls: 'summary-row' });
-		summaryRow.createSpan({ text: `已选中 ${this.selectedDeckIds.size} 个卡组` });
-
-		// 第二行：操作按钮
-		const buttonsRow = actionsBar.createDiv({ cls: 'actions-row' });
-
-		const mergeBtn = buttonsRow.createEl('button', {
-			text: '🔗 合并卡组',
-			cls: 'action-btn primary'
-		});
-		mergeBtn.addEventListener('click', () => {
-			this.showMergeDecksModal();
-		});
-
-		const cancelBtn = buttonsRow.createEl('button', {
-			text: '✖ 取消选择',
-			cls: 'action-btn'
-		});
-		cancelBtn.addEventListener('click', () => {
-			this.selectedDeckIds.clear();
-			this.render();
-		});
-	}
+/* 底部多选栏已弃用，改为顶部批量管理工具条 */
 
 	/**
 	 * 切换卡组选择状态
@@ -265,14 +290,81 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 		this.render();
 	}
 
+	// 进入/退出批量管理模式
+	private toggleDeckSelectionMode(): void {
+		this.deckSelectionMode = !this.deckSelectionMode;
+		if (!this.deckSelectionMode) {
+			this.selectedDeckIds.clear();
+		}
+		this.render();
+	}
+
+	private exitDeckSelectionMode(): void {
+		this.deckSelectionMode = false;
+		this.selectedDeckIds.clear();
+		this.render();
+	}
+
+	private setDeckSelected(deckId: string, selected: boolean): void {
+		if (selected) this.selectedDeckIds.add(deckId);
+		else this.selectedDeckIds.delete(deckId);
+	}
+
+	private async handleBulkDeckMerge(): Promise<void> {
+		if (this.selectedDeckIds.size < 2) {
+			new Notice('请至少选择2个卡组进行合并');
+			return;
+		}
+		await this.showMergeDecksModal();
+		// 合并完成后 showMergeDecksModal 内部会调用 mergeDecks → 清空并刷新
+	}
+
+	private async handleBulkDeckDelete(): Promise<void> {
+		if (this.selectedDeckIds.size === 0) {
+			new Notice('请先选择要删除的卡组');
+			return;
+		}
+		const count = this.selectedDeckIds.size;
+		new ConfirmExitModal(
+			this.app,
+			`确定删除选中的 ${count} 个卡组吗？此操作不可恢复（含数据文件）`,
+			'取消',
+			'删除',
+			async () => {
+				const failed: string[] = [];
+				for (const id of Array.from(this.selectedDeckIds)) {
+					try {
+						await this.storage.deleteDeck(id);
+					} catch (e) {
+						console.error('删除卡组失败:', id, e);
+						failed.push(id);
+					}
+				}
+
+				if (failed.length === 0) {
+					new Notice(`已删除 ${count} 个卡组`);
+					this.exitDeckSelectionMode();
+					await this.loadDecks();
+					this.render();
+				} else {
+					new Notice(`部分删除失败：${failed.length}/${count}，请查看控制台详情`);
+					this.deckSelectionMode = true;
+					this.selectedDeckIds = new Set(failed);
+					await this.loadDecks();
+					this.render();
+				}
+			}
+		).open();
+	}
+
 	/**
 	 * 显示创建卡组对话框
 	 */
-    private showCreateDeckModal(): void {
-        new CreateDeckModal(this.app, this.plugin, async (deckName, sourceNote, cardCount) => {
-            await this.createDeck(deckName, sourceNote, cardCount);
-        }).open();
-    }
+	private showCreateDeckModal(): void {
+		new CreateDeckModal(this.app, this.plugin, async (deckName, sourceNote, cardCount) => {
+			await this.createDeck(deckName, sourceNote, cardCount);
+		}).open();
+	}
 
 	/**
 	 * 创建卡组

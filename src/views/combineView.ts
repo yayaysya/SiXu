@@ -102,6 +102,7 @@ export class CombineNotesView extends ItemView {
 
 	// Flashcard相关状态
 	private selectedDeckIds: Set<string> = new Set();
+	private deckSelectionMode: boolean = false;
 	private currentDeck: FlashcardDeck | null = null;
 	private currentCards: Flashcard[] = [];
 	private currentCardIndex: number = 0;
@@ -1996,29 +1997,7 @@ export class CombineNotesView extends ItemView {
 		});
 	}
 
-	/**
-	 * 侧边视图内弹层：确认删除卡组
-	 */
-	private showDeleteDeckConfirm(deckName: string): Promise<boolean> {
-		return new Promise((resolve) => {
-			const overlay = this.containerEl.createDiv({ cls: 'side-modal-overlay' });
-			const card = overlay.createDiv({ cls: 'side-modal-card' });
-			card.createEl('h3', { text: '删除闪卡组' });
-			const msg = card.createDiv({ cls: 'side-modal-message' });
-			msg.appendText('确认删除[');
-			msg.createEl('strong', { text: deckName });
-			msg.appendText(']卡组？此操作不可恢复');
 
-			const actions = card.createDiv({ cls: 'side-modal-actions' });
-			const cancelBtn = actions.createEl('button', { text: '取消' });
-			const okBtn = actions.createEl('button', { text: '确认删除', cls: 'mod-cta' });
-
-			const cleanup = (result: boolean) => { overlay.detach(); resolve(result); };
-			cancelBtn.addEventListener('click', () => cleanup(false));
-			okBtn.addEventListener('click', () => cleanup(true));
-			overlay.addEventListener('click', (e: MouseEvent) => { if (e.target === overlay) cleanup(false); });
-		});
-	}
 
 	/**
 	 * 渲染最近情况区域
@@ -3541,6 +3520,13 @@ export class CombineNotesView extends ItemView {
 		});
 		titleRow.createEl('h2', { text: '闪卡背诵', cls: 'page-title' });
 
+		// 批量管理切换按钮（与 Quiz 列表一致）
+		const manageBtn = titleRow.createEl('button', {
+			cls: this.deckSelectionMode ? 'quiz-manage-btn active' : 'quiz-manage-btn',
+			text: this.deckSelectionMode ? '退出管理' : '批量管理'
+		});
+		manageBtn.addEventListener('click', () => this.toggleDeckSelectionMode());
+
 		// 第二行：副标题
 		header.createEl('p', { text: '选择一个卡组开始学习', cls: 'page-subtitle' });
 
@@ -3575,6 +3561,23 @@ export class CombineNotesView extends ItemView {
 			this.render();
 		});
 
+		// 管理模式顶部工具条
+		if (this.deckSelectionMode) {
+			const bulkBar = header.createDiv({ cls: 'quiz-bulk-toolbar' });
+			bulkBar.createSpan({ cls: 'quiz-bulk-info', text: `已选择 ${this.selectedDeckIds.size} 个卡组` });
+
+			const mergeBtn = bulkBar.createEl('button', { cls: 'deck-btn primary', text: '合并所选' });
+			mergeBtn.addEventListener('click', async () => {
+				if (this.selectedDeckIds.size < 2) { new Notice('请至少选择2个卡组进行合并'); return; }
+				const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+				await this.showMergeDecksModal(storage);
+			});
+
+			const deleteBtn = bulkBar.createEl('button', { cls: 'deck-btn', text: '删除所选' });
+			deleteBtn.disabled = this.selectedDeckIds.size === 0;
+			deleteBtn.addEventListener('click', async () => { await this.handleBulkDeckDelete(); });
+		}
+
 		// 卡组列表容器
 		const deckContainer = container.createDiv({ cls: 'flashcard-deck-list' });
 
@@ -3593,20 +3596,22 @@ export class CombineNotesView extends ItemView {
 				}
 			}
 
-            // 先添加"创建新卡组"卡片（放在最前面）
-            const createCard = deckContainer.createDiv({ cls: 'deck-card create-new' });
+            // 先添加"创建新卡组"卡片（放在最前面）——批量管理时隐藏，避免干扰
+            if (!this.deckSelectionMode) {
+                const createCard = deckContainer.createDiv({ cls: 'deck-card create-new' });
 
-            // 新样式：虚线边框 + SVG 加号
-            const icon = createCard.createDiv({ cls: 'create-plus-circle' });
-            setIcon(icon, 'plus');
-            createCard.createEl('h3', { text: '创建新卡组' });
-            createCard.createEl('p', { text: '从笔记生成学习卡片' });
+                // 新样式：虚线边框 + SVG 加号
+                const icon = createCard.createDiv({ cls: 'create-plus-circle' });
+                setIcon(icon, 'plus');
+                createCard.createEl('h3', { text: '创建新卡组' });
+                createCard.createEl('p', { text: '从笔记生成学习卡片' });
 
-			createCard.addEventListener('click', (e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				this.openCreateDeckModal();
-			});
+                createCard.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.openCreateDeckModal();
+                });
+            }
 
 			if (decks.length === 0) {
 				// 使用新的CSS类，避免与empty-state冲突导致卡死
@@ -3619,10 +3624,7 @@ export class CombineNotesView extends ItemView {
 				}
 			}
 
-			// 多选操作栏
-			if (this.selectedDeckIds.size > 0) {
-				this.renderMultiSelectActions(container, storage);
-			}
+			// 旧的底部多选操作栏已移除，改为顶部批量管理工具条
 
 		} catch (error) {
 			console.error('加载闪卡组失败:', error);
@@ -3655,19 +3657,40 @@ export class CombineNotesView extends ItemView {
 	 * 渲染单个卡组卡片
 	 */
     private renderDeckCard(container: HTMLElement, deck: FlashcardDeck, storage: FlashcardStorage): void {
+        if (this.deckSelectionMode) {
+            const row = container.createDiv({ cls: 'quiz-card-row selection-mode' });
+            const isSelected = this.selectedDeckIds.has(deck.id);
+            const selectWrap = row.createDiv({ cls: 'quiz-card-select-area' });
+            selectWrap.toggleClass('selected', isSelected);
+            const checkbox = selectWrap.createEl('input', { type: 'checkbox', cls: 'quiz-card-checkbox' }) as HTMLInputElement;
+            checkbox.checked = isSelected;
+            checkbox.addEventListener('click', (e: MouseEvent) => e.stopPropagation());
+            checkbox.addEventListener('change', (e: Event) => {
+                const target = e.target as HTMLInputElement;
+                this.setDeckSelected(deck.id, target.checked);
+                this.render();
+            });
+            selectWrap.addEventListener('click', (e: MouseEvent) => {
+                e.preventDefault();
+                if (e.target instanceof HTMLInputElement) return;
+                checkbox.checked = !checkbox.checked;
+                this.setDeckSelected(deck.id, checkbox.checked);
+                this.render();
+            });
+            this.renderDeckCardCore(row, deck, storage);
+        } else {
+            this.renderDeckCardCore(container, deck, storage);
+        }
+    }
+
+    private renderDeckCardCore(container: HTMLElement, deck: FlashcardDeck, storage: FlashcardStorage): void {
         const isSelected = this.selectedDeckIds.has(deck.id);
-        const card = container.createDiv({
-            cls: (isSelected ? 'deck-card selected ' : 'deck-card ') + 'folder-card'
-        });
+        const card = container.createDiv({ cls: (isSelected ? 'deck-card selected ' : 'deck-card ') + 'folder-card' });
 
-        // 扁平瓷贴风格：仅保留主体 overlay（无封面、无阴影）
         const overlay = card.createDiv({ cls: `folder-overlay ${this.getTileColorClass(deck.id || deck.name)}` });
-
-        // 主体内容与底部信息（包含标题与副标题）
         const body = overlay.createDiv({ cls: 'folder-body' });
         const header = body.createDiv({ cls: 'folder-header' });
         header.createDiv({ cls: 'folder-title', text: deck.name });
-        // 顶部中文日期
         const time = deck.stats.lastStudyTime || deck.createdAt;
         const dt = new Date(time);
         const y = dt.getFullYear();
@@ -3676,36 +3699,19 @@ export class CombineNotesView extends ItemView {
         header.createDiv({ cls: 'folder-date-ch', text: `${y}年${m}月${d}日` });
 
         const footer = body.createDiv({ cls: 'folder-footer' });
-        // 左：掌握率（大号百分比+小号文字）
         const masteryDiv = footer.createDiv({ cls: 'folder-mastery' });
         const percent = Math.round(deck.stats.masteryRate * 100);
         masteryDiv.createSpan({ cls: 'value', text: `${percent}%` });
         masteryDiv.createSpan({ cls: 'label', text: '掌握率' });
-        // 右：张数
         footer.createDiv({ cls: 'folder-count', text: `${deck.stats.total} 张` });
 
-        // 操作：学习/选择/删除（弱化显示）
         const actions = overlay.createDiv({ cls: 'folder-actions' });
-
         const studyBtn = actions.createEl('button', { text: '学习', cls: 'deck-btn primary' });
         studyBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
             await this.startStudying(deck.id);
         });
 
-        const selectBtn = actions.createEl('button', { text: isSelected ? '✓ 已选' : '选择', cls: 'deck-btn' });
-        selectBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleDeckSelection(deck.id);
-        });
-
-        const deleteBtn = actions.createEl('button', { text: '删除', cls: 'deck-btn' });
-        deleteBtn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const confirmed = await this.showDeleteDeckConfirm(deck.name);
-            if (!confirmed) return;
-            await this.deleteDeck(deck.id, storage);
-        });
     }
 
 	/**
@@ -3751,22 +3757,7 @@ export class CombineNotesView extends ItemView {
 		}
 	}
 
-	/**
-	 * 删除卡组
-	 */
-	private async deleteDeck(deckId: string, storage: FlashcardStorage): Promise<void> {
-		// TODO: Add confirmation modal
-		try {
-			await storage.deleteDeck(deckId);
-			// 删除后同步清理选择状态，避免残留多选操作栏
-			this.selectedDeckIds.delete(deckId);
-			new Notice('卡组已删除');
-			this.render(); // 刷新列表
-		} catch (error) {
-			console.error('删除卡组失败:', error);
-			new Notice(`删除失败: ${error.message}`);
-		}
-	}
+
 
 	/**
 	 * 切换卡组选择状态
@@ -3780,36 +3771,42 @@ export class CombineNotesView extends ItemView {
 		this.render();
 	}
 
-	/**
-	 * 渲染多选操作栏
-	 */
-	private renderMultiSelectActions(container: HTMLElement, storage: FlashcardStorage): void {
-		const actionsBar = container.createDiv({ cls: 'multi-select-actions' });
-
-		// 第一行：已选择 X 个卡组
-		const summaryRow = actionsBar.createDiv({ cls: 'summary-row' });
-		summaryRow.createSpan({ text: `已选中 ${this.selectedDeckIds.size} 个卡组` });
-
-		// 第二行：操作按钮
-		const buttonsRow = actionsBar.createDiv({ cls: 'actions-row' });
-
-		const mergeBtn = buttonsRow.createEl('button', {
-			text: '🔗 合并选中的卡组',
-			cls: 'action-btn primary'
-		});
-		mergeBtn.addEventListener('click', () => {
-			this.showMergeDecksModal(storage);
-		});
-
-		const cancelBtn = buttonsRow.createEl('button', {
-			text: '✖ 取消选择',
-			cls: 'action-btn'
-		});
-		cancelBtn.addEventListener('click', () => {
+	private toggleDeckSelectionMode(): void {
+		this.deckSelectionMode = !this.deckSelectionMode;
+		if (!this.deckSelectionMode) {
 			this.selectedDeckIds.clear();
-			this.render();
-		});
+		}
+		this.render();
 	}
+
+	private setDeckSelected(deckId: string, selected: boolean): void {
+		if (selected) this.selectedDeckIds.add(deckId);
+		else this.selectedDeckIds.delete(deckId);
+	}
+
+	private async handleBulkDeckDelete(): Promise<void> {
+		if (this.selectedDeckIds.size === 0) { new Notice('请先选择要删除的卡组'); return; }
+		const ok = await this.showConfirmDialog(`确定删除选中的 ${this.selectedDeckIds.size} 个卡组吗？此操作不可恢复。`, '批量删除卡组', '删除', '取消');
+		if (!ok) return;
+		const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+		const failed: string[] = [];
+		for (const id of Array.from(this.selectedDeckIds)) {
+			try { await storage.deleteDeck(id); }
+			catch (e) { console.error('删除卡组失败:', id, e); failed.push(id); }
+		}
+		if (failed.length === 0) {
+			new Notice(`已删除 ${this.selectedDeckIds.size} 个卡组`);
+			this.deckSelectionMode = false;
+			this.selectedDeckIds.clear();
+		} else {
+			new Notice(`部分删除失败：${failed.length}/${failed.length + (this.selectedDeckIds.size - failed.length)}，请查看控制台`);
+			this.deckSelectionMode = true;
+			this.selectedDeckIds = new Set(failed);
+		}
+		this.render();
+	}
+
+    // 旧的底部多选操作栏已移除
 
 	/**
 	 * 显示合并卡组对话框
