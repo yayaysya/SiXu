@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, TFile, Notice, Modal, App, setIcon } from 'obsidian';
+import { ItemView, WorkspaceLeaf, TFile, Notice, Modal, App, setIcon, MarkdownRenderer, Component } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { FlashcardDeck, Flashcard, FlashcardGenerationOptions } from './types';
 import { TaskStatus } from '../types';
@@ -867,6 +867,7 @@ class ConfirmFlashcardsModal extends Modal {
 	private cards: Flashcard[];
 	private onConfirm: (cards: Flashcard[]) => void;
 	private selectedCards: Set<string>;
+	private markdownComponents: Component[] = [];
 
 	constructor(
 		app: App,
@@ -881,6 +882,7 @@ class ConfirmFlashcardsModal extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
+		this.cleanupMarkdownComponents();
 		contentEl.empty();
 		this.modalEl.addClass('confirm-flashcards-modal');
 		this.modalEl.style.width = '80%';
@@ -995,13 +997,19 @@ class ConfirmFlashcardsModal extends Modal {
 
 		// 问题
 		const questionEl = content.createDiv({ cls: 'flashcard-question' });
-		questionEl.createEl('strong', { text: `Q${index + 1}: ` });
-		questionEl.appendText(card.question);
+		questionEl.createEl('strong', { text: `Q${index + 1}:` });
+		const questionBody = questionEl.createDiv({ cls: 'flashcard-md markdown-rendered' });
+		const questionComponent = new Component();
+		this.markdownComponents.push(questionComponent);
+		MarkdownRenderer.renderMarkdown(card.question || '', questionBody, card.sourceNote || '', questionComponent);
 
 		// 答案
 		const answerEl = content.createDiv({ cls: 'flashcard-answer' });
-		answerEl.createEl('strong', { text: 'A: ' });
-		answerEl.appendText(card.answer);
+		answerEl.createEl('strong', { text: 'A:' });
+		const answerBody = answerEl.createDiv({ cls: 'flashcard-md markdown-rendered' });
+		const answerComponent = new Component();
+		this.markdownComponents.push(answerComponent);
+		MarkdownRenderer.renderMarkdown(card.answer || '', answerBody, card.sourceNote || '', answerComponent);
 
 		// 来源
 		if (card.sourceSection) {
@@ -1013,6 +1021,12 @@ class ConfirmFlashcardsModal extends Modal {
 	onClose(): void {
 		const { contentEl } = this;
 		contentEl.empty();
+		this.cleanupMarkdownComponents();
+	}
+
+	private cleanupMarkdownComponents(): void {
+		this.markdownComponents.forEach(component => component.unload());
+		this.markdownComponents = [];
 	}
 }
 

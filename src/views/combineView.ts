@@ -3246,17 +3246,7 @@ export class CombineNotesView extends ItemView {
             });
         }
 
-		const manageRow = actions.createDiv({ cls: 'quiz-card-actions-row' });
-		const deleteBtn = manageRow.createEl('button', {
-			cls: 'quiz-action-btn danger',
-			text: '删除试题'
-		});
-		deleteBtn.addEventListener('click', async (event) => {
-			event.preventDefault();
-			event.stopPropagation();
-			await this.handleSingleQuizDelete(file);
-		});
-    }
+	}
 
 	private async handleSingleQuizDelete(file: TFile): Promise<void> {
 		const confirmed = await this.showConfirmDialog(
@@ -4034,7 +4024,8 @@ export class CombineNotesView extends ItemView {
 
 		const questionContent = cardFront.createDiv({ cls: 'card-question-content' });
 		questionContent.createEl('h3', { text: '💭 回忆答案' });
-		questionContent.createEl('p', { text: card.question });
+		const questionBody = questionContent.createDiv({ cls: 'card-question-body markdown-rendered' });
+		MarkdownRenderer.renderMarkdown(card.question || '', questionBody, card.sourceNote || '', this);
 
 		// 卡片背面 - 答案
 		const cardBack = card3d.createDiv({ cls: 'card-face card-back' });
@@ -4045,7 +4036,8 @@ export class CombineNotesView extends ItemView {
 
 		const answerContent = cardBack.createDiv({ cls: 'card-answer-content' });
 		answerContent.createEl('h3', { text: '✓ 答案' });
-		answerContent.createEl('p', { text: card.answer });
+		const answerBody = answerContent.createDiv({ cls: 'card-answer-body markdown-rendered' });
+		MarkdownRenderer.renderMarkdown(card.answer || '', answerBody, card.sourceNote || '', this);
 
 		// 原文链接按钮（如果有原文信息）
 		if (card.sourceNote && card.sourceSection) {
