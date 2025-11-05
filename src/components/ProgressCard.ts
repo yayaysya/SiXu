@@ -28,6 +28,7 @@ export class ProgressCard {
 		// 创建遮罩层
 		this.overlay = parent.createDiv({ cls: 'progress-card-overlay' });
 		this.overlay.style.display = 'none';
+		this.overlay.style.pointerEvents = 'none'; // 隐藏时不阻止点击事件
 
 		// 创建卡片
 		this.card = this.overlay.createDiv({ cls: 'progress-card' });
@@ -100,6 +101,7 @@ export class ProgressCard {
 	 */
 	show(): void {
 		this.overlay.style.display = 'flex';
+		this.overlay.style.pointerEvents = 'auto'; // 显示时允许点击事件
 		this.isVisible = true;
 	}
 
@@ -108,6 +110,7 @@ export class ProgressCard {
 	 */
 	hide(): void {
 		this.overlay.style.display = 'none';
+		this.overlay.style.pointerEvents = 'none'; // 隐藏时不阻止点击事件
 		this.isVisible = false;
 	}
 

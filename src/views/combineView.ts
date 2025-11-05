@@ -223,6 +223,12 @@ export class CombineNotesView extends ItemView {
 			this.userProfileView = null;
 		}
 
+		// 清理进度卡片
+		if (this.progressCard) {
+			this.progressCard.destroy();
+			this.progressCard = null;
+		}
+
 		// 清理事件监听器
 		if (this.fileChangeEventRef) {
 			this.plugin.app.workspace.offref(this.fileChangeEventRef);
@@ -238,6 +244,12 @@ export class CombineNotesView extends ItemView {
 	 * 渲染视图（新架构：使用底部导航）
 	 */
 	private render(): void {
+		// 清理可能存在的进度卡片
+		if (this.progressCard) {
+			this.progressCard.destroy();
+			this.progressCard = null;
+		}
+
 		const container = this.containerEl;
 		container.empty();
 		container.addClass('notebook-llm-view-container');
@@ -521,7 +533,12 @@ export class CombineNotesView extends ItemView {
 			// 重置取消标志
 			this.isCancelled = false;
 
-			// 创建进度卡片
+			// 创建进度卡片前先清理旧的实例
+			if (this.progressCard) {
+				this.progressCard.destroy();
+				this.progressCard = null;
+			}
+
 			const contentArea = this.containerEl.querySelector('.view-content-area');
 			if (!contentArea) return;
 
@@ -981,7 +998,12 @@ export class CombineNotesView extends ItemView {
 			// 重置取消标志
 			this.isCancelled = false;
 
-			// 创建进度卡片
+			// 创建进度卡片前先清理旧的实例
+			if (this.progressCard) {
+				this.progressCard.destroy();
+				this.progressCard = null;
+			}
+
 			const contentArea = this.containerEl.querySelector('.view-content-area');
 			if (!contentArea) return;
 
@@ -1403,7 +1425,12 @@ export class CombineNotesView extends ItemView {
 			// 重置取消标志
 			this.isCancelled = false;
 
-			// 创建进度卡片
+			// 创建进度卡片前先清理旧的实例
+			if (this.progressCard) {
+				this.progressCard.destroy();
+				this.progressCard = null;
+			}
+
 			const contentArea = this.containerEl.querySelector('.view-content-area');
 			if (!contentArea) return;
 
@@ -2062,7 +2089,7 @@ export class CombineNotesView extends ItemView {
 
 		if (activities.length === 0) {
 			listContainer.createDiv({
-				cls: 'empty-state',
+				cls: 'nb-empty-state',
 				text: '暂无活动记录'
 			});
 			return;
@@ -2719,12 +2746,12 @@ export class CombineNotesView extends ItemView {
 	 */
 	private async renderSearchResults(container: HTMLElement): Promise<void> {
 		if (this.searchResults.length === 0 && this.searchKeyword.trim()) {
-			container.createDiv({ cls: 'empty-state', text: '没有找到匹配的笔记' });
+			container.createDiv({ cls: 'nb-empty-state', text: '没有找到匹配的笔记' });
 			return;
 		}
 
 		if (this.searchResults.length === 0 && !this.searchKeyword.trim()) {
-			container.createDiv({ cls: 'empty-state', text: '输入关键词开始搜索' });
+			container.createDiv({ cls: 'nb-empty-state', text: '输入关键词开始搜索' });
 			return;
 		}
 
@@ -3109,7 +3136,7 @@ export class CombineNotesView extends ItemView {
 		if (quizFiles.length === 0) {
 			this.exitQuizSelectionMode();
 			quizList.createDiv({
-				cls: 'empty-state',
+				cls: 'nb-empty-state',
 				text: '暂无Quiz试题，请先在整理页面生成试题'
 			});
 			return;
@@ -3377,7 +3404,7 @@ export class CombineNotesView extends ItemView {
         const list = page.createDiv({ cls: 'quiz-results-list' });
 
 		if (!this.currentQuizFile) {
-			list.createEl('p', { text: '未选择试题', cls: 'empty-state' });
+			list.createEl('p', { text: '未选择试题', cls: 'nb-empty-state' });
 			return;
 		}
 
@@ -3390,7 +3417,7 @@ export class CombineNotesView extends ItemView {
 		}
 
 		if (results.length === 0) {
-			list.createEl('p', { text: '暂无历史考试结果', cls: 'empty-state' });
+			list.createEl('p', { text: '暂无历史考试结果', cls: 'nb-empty-state' });
 			return;
 		}
 
@@ -3855,7 +3882,12 @@ export class CombineNotesView extends ItemView {
 					this.deckBackgroundActive = false;
 					this.deckBackgroundTaskId = null;
 
-					// 创建进度卡片
+					// 创建进度卡片前先清理旧的实例
+					if (this.progressCard) {
+						this.progressCard.destroy();
+						this.progressCard = null;
+					}
+
 					const contentArea = this.containerEl.querySelector('.view-content-area');
 					if (!contentArea) return;
 
@@ -3973,7 +4005,7 @@ export class CombineNotesView extends ItemView {
 		container.empty();
 
 		if (!this.currentDeck || this.currentCards.length === 0) {
-			container.createEl('p', { text: '没有可学习的卡片', cls: 'empty-state' });
+			container.createEl('p', { text: '没有可学习的卡片', cls: 'nb-empty-state' });
 			return;
 		}
 
@@ -4537,7 +4569,7 @@ export class CombineNotesView extends ItemView {
 	 */
 	private renderFlashcardCreate(container: HTMLElement): void {
 		container.empty();
-		container.createEl('p', { text: '创建闪卡功能（通过对话框实现）', cls: 'empty-state' });
+		container.createEl('p', { text: '创建闪卡功能（通过对话框实现）', cls: 'nb-empty-state' });
 	}
 
 	/**
@@ -5089,7 +5121,7 @@ class FilePickerModal extends Modal {
             : this.files;
 
         if (filtered.length === 0) {
-            this.listContainer.createDiv({ text: '未找到匹配的笔记', cls: 'empty-state' });
+            this.listContainer.createDiv({ text: '未找到匹配的笔记', cls: 'nb-empty-state' });
             return;
         }
 

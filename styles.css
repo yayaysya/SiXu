@@ -1139,6 +1139,7 @@ button.mod-cta:hover {
 
 /* 内容区域 */
 .view-content-area {
+    position: relative; /* 修复：为 ProgressCard 的绝对定位遮罩层提供定位上下文 */
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -1217,10 +1218,10 @@ button.mod-cta:hover {
     color: var(--text-normal);
 }
 
-.empty-state {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--text-muted);
+.nb-empty-state {
+	text-align: center;
+	padding: 40px 20px;
+	color: var(--text-muted);
 }
 
 /* 闪卡空状态提示（修复卡死问题） */

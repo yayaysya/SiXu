@@ -838,7 +838,7 @@ class FilePickerModal extends Modal {
 			: this.files;
 
 		if (filtered.length === 0) {
-			this.listContainer.createDiv({ text: '未找到匹配的笔记', cls: 'empty-state' });
+			this.listContainer.createDiv({ text: '未找到匹配的笔记', cls: 'nb-empty-state' });
 			return;
 		}
 
