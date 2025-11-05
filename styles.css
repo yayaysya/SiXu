@@ -1726,12 +1726,14 @@ button.mod-cta:hover {
 }
 
 .quiz-card-select-area:hover {
-    border-color: var(--interactive-accent);
+    /* 未选中时悬停不显示区域轮廓 */
+    border-color: transparent !important;
 }
 
 .quiz-card-select-area.selected {
-    border-color: var(--interactive-accent);
-    background: var(--background-secondary-alt);
+    /* 选中时仅显示中间的 checkbox，不显示容器边框和填充 */
+    border-color: transparent !important;
+    background: transparent !important;
 }
 
 .quiz-card-checkbox {
