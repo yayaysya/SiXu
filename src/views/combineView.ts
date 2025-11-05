@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, TFile, Notice, EventRef, Modal, App, setIcon, MarkdownRenderer, Component } from 'obsidian';
 import NotebookLLMPlugin from '../main';
-import { CombineNoteItem, QuizQuestion, QuizQuestionResult, QuizData } from '../types';
+import { CombineNoteItem, QuizQuestion, QuizQuestionResult, QuizData, TaskStatus } from '../types';
 import { StatisticsManager } from '../utils/statistics';
 import { Activity, getActivityTypeLabel, getActivityTypeIcon } from '../types/activity';
 import { ProgressCard } from '../components/ProgressCard';
@@ -108,6 +108,8 @@ export class CombineNotesView extends ItemView {
 	private currentCardIndex: number = 0;
 	private studyStartTime: number = 0;
 	private deckSortMode: 'time' | 'name' | 'cards' = 'time';
+	private deckBackgroundTaskId: string | null = null;
+	private deckBackgroundActive: boolean = false;
 
 	// 个人资料视图
 	private userProfileView: UserProfileView | null = null;
@@ -3856,10 +3858,12 @@ export class CombineNotesView extends ItemView {
         const modal = new CreateDeckModal(
             this.app,
             this.plugin,
-            async (deckName: string, sourceNote: string, cardCount: number) => {
+			async (deckName: string, sourceNote: string, cardCount: number) => {
 				try {
 					// 重置取消标志
 					this.isCancelled = false;
+					this.deckBackgroundActive = false;
+					this.deckBackgroundTaskId = null;
 
 					// 创建进度卡片
 					const contentArea = this.containerEl.querySelector('.view-content-area');
@@ -3871,10 +3875,20 @@ export class CombineNotesView extends ItemView {
 							this.isCancelled = true;
 							this.progressCard?.destroy();
 							this.progressCard = null;
+							if (this.deckBackgroundActive && this.deckBackgroundTaskId) {
+								const taskId = this.deckBackgroundTaskId;
+								this.plugin.statusBarManager?.hideTask(taskId);
+							}
+							this.deckBackgroundActive = false;
+							this.deckBackgroundTaskId = null;
 							new Notice('已取消生成');
 						},
 						onBackground: () => {
 							this.progressCard?.hide();
+							this.deckBackgroundActive = true;
+							this.deckBackgroundTaskId = `flashcard-bg-${Date.now()}`;
+							const taskId = this.deckBackgroundTaskId;
+							this.plugin.statusBarManager?.showTaskStatus(taskId, TaskStatus.GENERATING, 0, '闪卡生成中...');
 							new Notice('闪卡正在后台生成，完成后会通知您');
 						}
 					});
@@ -3895,12 +3909,25 @@ export class CombineNotesView extends ItemView {
 								throw new Error('User cancelled');
 							}
 							this.progressCard?.updateProgress(percent, status);
+							if (this.deckBackgroundActive && this.deckBackgroundTaskId) {
+								const message = status || '闪卡生成中...';
+								const taskId = this.deckBackgroundTaskId;
+								const taskStatus = percent >= 100 ? TaskStatus.COMPLETED : TaskStatus.GENERATING;
+								this.plugin.statusBarManager?.showTaskStatus(taskId, taskStatus, percent, message);
+							}
 						}
 					);
 
 					// 完成，销毁进度卡片
 					this.progressCard?.destroy();
 					this.progressCard = null;
+					if (this.deckBackgroundActive && this.deckBackgroundTaskId) {
+						const taskId = this.deckBackgroundTaskId;
+						this.plugin.statusBarManager?.showTaskStatus(taskId, TaskStatus.COMPLETED, 100, '闪卡生成完成');
+						window.setTimeout(() => {
+							this.plugin.statusBarManager?.hideTask(taskId);
+						}, 3000);
+					}
 
 					const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
 
@@ -3927,10 +3954,22 @@ export class CombineNotesView extends ItemView {
 					this.progressCard?.destroy();
 					this.progressCard = null;
 
+					if (this.deckBackgroundActive && this.deckBackgroundTaskId) {
+						const taskId = this.deckBackgroundTaskId;
+						this.plugin.statusBarManager?.showTaskStatus(taskId, TaskStatus.FAILED, 100, '闪卡生成失败');
+						window.setTimeout(() => {
+							this.plugin.statusBarManager?.hideTask(taskId);
+						}, 4000);
+					}
+
 					if (error.message !== 'User cancelled') {
 						console.error('生成闪卡失败:', error);
 						new Notice(`生成失败: ${error.message}`);
 					}
+				}
+				finally {
+					this.deckBackgroundActive = false;
+					this.deckBackgroundTaskId = null;
 				}
 			}
 		);

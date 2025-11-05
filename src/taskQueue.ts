@@ -259,6 +259,15 @@ export class StatusBarManager {
 	}
 
 	/**
+	 * 隐藏指定任务的状态
+	 */
+	hideTask(taskId: string): void {
+		if (!this.statusBarItem) return;
+		if (this.currentTaskId !== taskId) return;
+		this.hide();
+	}
+
+	/**
 	 * 隐藏状态栏
 	 */
 	hide(): void {

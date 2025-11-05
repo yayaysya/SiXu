@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf, TFile, Notice, Modal, App, setIcon } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { FlashcardDeck, Flashcard, FlashcardGenerationOptions } from './types';
+import { TaskStatus } from '../types';
 import { FlashcardStorage } from './FlashcardStorage';
 import { FlashcardGenerator } from './FlashcardGenerator';
 import { ProgressCard } from '../components/ProgressCard';
@@ -22,6 +23,8 @@ export class FlashcardDeckView extends ItemView {
 	private deckSelectionMode: boolean = false;
 	private progressCard: ProgressCard | null = null;
 	private isCancelled: boolean = false;
+	private backgroundTaskId: string | null = null;
+	private backgroundModeActive: boolean = false;
 
 	// 根据字符串生成稳定的瓷贴颜色类
 	private getTileColorClass(key: string): string {
@@ -376,6 +379,8 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 	): Promise<void> {
 		try {
 			this.isCancelled = false;
+			this.backgroundModeActive = false;
+			this.backgroundTaskId = null;
 
 			// 创建进度卡片
 			this.progressCard = new ProgressCard(this.containerEl, {
@@ -384,10 +389,20 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 					this.isCancelled = true;
 					this.progressCard?.destroy();
 					this.progressCard = null;
+					if (this.backgroundModeActive && this.backgroundTaskId) {
+						const taskId = this.backgroundTaskId;
+						this.plugin.statusBarManager?.hideTask(taskId);
+					}
+					this.backgroundModeActive = false;
+					this.backgroundTaskId = null;
 					new Notice('已取消生成');
 				},
 				onBackground: () => {
 					this.progressCard?.hide();
+					this.backgroundModeActive = true;
+					this.backgroundTaskId = `flashcard-bg-${Date.now()}`;
+					const taskId = this.backgroundTaskId;
+					this.plugin.statusBarManager?.showTaskStatus(taskId, TaskStatus.GENERATING, 0, '闪卡生成中...');
 					new Notice('闪卡正在后台生成，完成后会通知您');
 				}
 			});
@@ -406,12 +421,25 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 						throw new Error('User cancelled');
 					}
 					this.progressCard?.updateProgress(percent, status);
+					if (this.backgroundModeActive && this.backgroundTaskId) {
+						const message = status || '闪卡生成中...';
+						const taskId = this.backgroundTaskId;
+						const taskStatus = percent >= 100 ? TaskStatus.COMPLETED : TaskStatus.GENERATING;
+						this.plugin.statusBarManager?.showTaskStatus(taskId, taskStatus, percent, message);
+					}
 				}
 			);
 
 			// 显示确认界面
 			this.progressCard?.destroy();
 			this.progressCard = null;
+			if (this.backgroundModeActive && this.backgroundTaskId) {
+				const taskId = this.backgroundTaskId;
+				this.plugin.statusBarManager?.showTaskStatus(taskId, TaskStatus.COMPLETED, 100, '闪卡生成完成');
+				window.setTimeout(() => {
+					this.plugin.statusBarManager?.hideTask(taskId);
+				}, 3000);
+			}
 
 			new ConfirmFlashcardsModal(
 				this.app,
@@ -437,10 +465,21 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 			this.progressCard?.destroy();
 			this.progressCard = null;
 
+			if (this.backgroundModeActive && this.backgroundTaskId) {
+				const taskId = this.backgroundTaskId;
+				this.plugin.statusBarManager?.showTaskStatus(taskId, TaskStatus.FAILED, 100, '闪卡生成失败');
+				window.setTimeout(() => {
+					this.plugin.statusBarManager?.hideTask(taskId);
+				}, 4000);
+			}
+
 			if (error.message !== 'User cancelled') {
 				console.error('创建卡组失败:', error);
 				new Notice(`创建失败: ${error.message}`);
 			}
+		} finally {
+			this.backgroundModeActive = false;
+			this.backgroundTaskId = null;
 		}
 	}
 
