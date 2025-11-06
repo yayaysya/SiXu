@@ -2,6 +2,8 @@ import { App, TFile } from 'obsidian';
 import { QuizQuestion, QuestionType, QuestionDifficulty } from '../types';
 import { UnifiedAIProvider } from '../api/unified';
 import NotebookLLMPlugin from '../main';
+import { createTextProvider } from '../api/factory';
+import { DebugMarkdownLogger } from '../utils/DebugMarkdown';
 
 /**
  * Quiz生成器配置
@@ -27,11 +29,8 @@ export class QuizGenerator {
 	/**
 	 * 获取AI Provider实例
 	 */
-	private getAIProvider(): UnifiedAIProvider {
-		const settings = this.plugin.settings;
-		const provider = settings.textProvider;
-		const config = settings.providers.text[provider];
-		return new UnifiedAIProvider(provider, config.apiKey, config.baseUrl);
+	private getAIProvider(logger?: DebugMarkdownLogger): UnifiedAIProvider {
+		return createTextProvider(this.plugin.settings, logger);
 	}
 
 	/**
@@ -40,7 +39,8 @@ export class QuizGenerator {
 	async generateQuizFromFile(
 		sourceFile: TFile,
 		options: QuizGeneratorOptions = {},
-		onProgress?: (percent: number, status: string) => void
+		onProgress?: (percent: number, status: string) => void,
+		logger?: DebugMarkdownLogger
 	): Promise<TFile> {
 		const {
 			difficulty = '中等',
@@ -48,59 +48,123 @@ export class QuizGenerator {
 			questionTypes = ['single-choice', 'multiple-choice', 'fill-blank', 'short-answer']
 		} = options;
 
-		// 读取源文件内容
-		onProgress?.(5, '正在读取文档内容...');
-		const content = await this.app.vault.read(sourceFile);
+		const startTime = Date.now();
+		let runLogger = logger;
+		let shouldFlush = false;
 
-		// 移除YAML Front Matter
-		const textContent = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+		if (!runLogger && this.plugin.settings.debugEnabled) {
+			runLogger = this.createLogger('Quiz 生成调试日志', {
+				sourceFile: sourceFile.path,
+				difficulty,
+				totalQuestions,
+				questionTypes
+			});
+			shouldFlush = !!runLogger;
+		}
 
-		// 构建生成提示词
-		onProgress?.(15, '正在分析文档结构...');
-		const prompt = this.buildGenerationPrompt(
-			textContent,
-			sourceFile.basename,
+		runLogger?.appendSection('任务开始', {
+			sourceFile: sourceFile.path,
 			difficulty,
 			totalQuestions,
 			questionTypes
-		);
+		});
 
-		// 调用AI生成题目
-		onProgress?.(25, '正在通过AI生成试题...');
-		const aiProvider = this.getAIProvider();
-		const response = await aiProvider.generateText(
-			'你是一个专业的教育工作者，擅长根据学习材料生成高质量的测验题目。',
-			prompt,
-			{
-				temperature: 0.7,
-				maxTokens: 8000,
-				model: this.plugin.settings.textModel
+		try {
+			onProgress?.(5, '正在读取文档内容...');
+			const content = await this.app.vault.read(sourceFile);
+			runLogger?.appendSection('原始文档信息', {
+				length: content.length,
+				preview: content.slice(0, 400)
+			});
+
+			const textContent = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+			onProgress?.(15, '正在分析文档结构...');
+			runLogger?.appendSection('处理后内容', {
+				length: textContent.length
+			});
+
+			const prompt = this.buildGenerationPrompt(
+				textContent,
+				sourceFile.basename,
+				difficulty,
+				totalQuestions,
+				questionTypes
+			);
+
+			onProgress?.(25, '正在通过AI生成试题...');
+			const aiProvider = this.getAIProvider(runLogger);
+			const response = await aiProvider.generateText(
+				'你是一个专业的教育工作者，擅长根据学习材料生成高质量的测验题目。',
+				prompt,
+				{
+					temperature: 0.7,
+					maxTokens: 8000,
+					model: this.plugin.settings.textModel
+				}
+			);
+			runLogger?.appendSection('模型响应信息', {
+				length: response.length
+			});
+
+			onProgress?.(75, '正在解析生成的试题...');
+			const questions = this.parseGeneratedQuestions(response, runLogger);
+
+			if (questions.length === 0) {
+				runLogger?.appendSection('题目解析结果', {
+					status: 'empty'
+				});
+				throw new Error('AI未能生成有效的题目');
 			}
-		);
 
-		// 解析AI生成的题目
-		onProgress?.(75, '正在解析生成的试题...');
-		const questions = this.parseGeneratedQuestions(response);
+			runLogger?.appendSection('题目统计', {
+				questionCount: questions.length,
+				typeStats: this.calculateTypeStats(questions)
+			});
 
-		if (questions.length === 0) {
-			throw new Error('AI未能生成有效的题目');
+			onProgress?.(85, '正在创建试题文件...');
+			const quizFile = await this.createQuizFile(
+				sourceFile,
+				questions,
+				difficulty,
+				questionTypes
+			);
+			runLogger?.appendSection('Quiz 文件生成', {
+				path: quizFile.path
+			});
+
+			onProgress?.(95, '正在更新源文件记录...');
+			await this.updateSourceFileQuizzes(sourceFile, quizFile);
+
+			onProgress?.(100, '试题生成完成！');
+			runLogger?.appendSection('任务完成', {
+				questionCount: questions.length,
+				durationMs: Date.now() - startTime
+			});
+
+			return quizFile;
+		} catch (error) {
+			runLogger?.appendSection('任务失败', {
+				sourceFile: sourceFile.path,
+				message: (error as any)?.message || String(error)
+			});
+			throw error;
+		} finally {
+			if (shouldFlush && runLogger) {
+				await runLogger.flush();
+			}
 		}
+	}
 
-		// 生成Quiz文件
-		onProgress?.(85, '正在创建试题文件...');
-		const quizFile = await this.createQuizFile(
-			sourceFile,
-			questions,
-			difficulty,
-			questionTypes
-		);
-
-		// 更新源文件的quiz_files字段
-		onProgress?.(95, '正在更新源文件记录...');
-		await this.updateSourceFileQuizzes(sourceFile, quizFile);
-
-		onProgress?.(100, '试题生成完成！');
-		return quizFile;
+	private createLogger(title: string, context: Record<string, any>): DebugMarkdownLogger | undefined {
+		if (!this.plugin.settings.debugEnabled) return undefined;
+		const enriched = {
+			...context,
+			textProvider: this.plugin.settings.textProvider,
+			textModel: this.plugin.settings.textModel
+		};
+		const logger = new DebugMarkdownLogger(this.app, title);
+		logger.appendSection('运行上下文', enriched);
+		return logger;
 	}
 
 	/**
@@ -204,14 +268,18 @@ ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截
 	/**
 	 * 解析AI生成的题目
 	 */
-	private parseGeneratedQuestions(aiResponse: string): QuizQuestion[] {
+	private parseGeneratedQuestions(aiResponse: string, logger?: DebugMarkdownLogger): QuizQuestion[] {
 		const questions: QuizQuestion[] = [];
+		let skipped = 0;
 
 		try {
-			// 提取JSON代码块
 			const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/);
 			if (!jsonMatch) {
 				console.error('AI响应中未找到JSON代码块');
+				logger?.appendSection('题目解析失败', {
+					reason: 'missing-json-block',
+					responsePreview: aiResponse.slice(0, 400)
+				});
 				return [];
 			}
 
@@ -220,13 +288,17 @@ ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截
 
 			if (!Array.isArray(rawQuestions)) {
 				console.error('解析的数据中没有questions数组');
+				logger?.appendSection('题目解析失败', {
+					reason: 'invalid-questions-field',
+					responsePreview: aiResponse.slice(0, 400)
+				});
 				return [];
 			}
 
-			// 验证并转换每个题目
 			for (const raw of rawQuestions) {
 				if (!raw.id || !raw.type || !raw.question || !raw.answer) {
 					console.warn('跳过不完整的题目:', raw);
+					skipped++;
 					continue;
 				}
 
@@ -239,20 +311,30 @@ ${content.substring(0, 6000)}${content.length > 6000 ? '\n...(内容过长已截
 					explanation: raw.explanation || ''
 				};
 
-				// 如果是选择题，添加选项
 				if (raw.type === 'single-choice' || raw.type === 'multiple-choice') {
 					if (Array.isArray(raw.options) && raw.options.length > 0) {
 						question.options = raw.options;
 					} else {
 						console.warn('选择题缺少选项:', raw);
+						skipped++;
 						continue;
 					}
 				}
 
 				questions.push(question);
 			}
+
+			logger?.appendSection('题目解析完成', {
+				totalParsed: rawQuestions.length,
+				validQuestions: questions.length,
+				skipped
+			});
 		} catch (error) {
 			console.error('解析AI生成的题目失败:', error);
+			logger?.appendSection('题目解析异常', {
+				message: (error as any)?.message || String(error),
+				responsePreview: aiResponse.slice(0, 400)
+			});
 		}
 
 		return questions;
