@@ -60,7 +60,7 @@ export class PendingTaskManager {
   private renderIcon(): void {
     this.statusBarItem.empty();
     const iconWrap = this.statusBarItem.createSpan({ cls: 'nb-task-tray-icon' });
-    setIcon(iconWrap, 'list');
+    setIcon(iconWrap, 'square-check');
     this.iconEl = iconWrap;
 
     const badge = this.statusBarItem.createSpan({ cls: 'nb-task-counter' });

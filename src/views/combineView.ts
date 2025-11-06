@@ -4881,9 +4881,9 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 开始学习路径生成流程
 	 */
-	private async startPathGeneration(config: LearningPathConfig): Promise<void> {
-		try {
-			// 验证文本模型的 API Key 配置，避免进入生成流程后才失败
+private async startPathGeneration(config: LearningPathConfig): Promise<void> {
+    try {
+        // 验证文本模型的 API Key 配置，避免进入生成流程后才失败
 			const provider = this.plugin.settings.textProvider;
 			const providerConfig = this.plugin.settings.providers.text[provider];
 			if (!providerConfig?.apiKey) {
@@ -4891,22 +4891,29 @@ export class CombineNotesView extends ItemView {
 				return;
 			}
 
-			// 显示生成中的Toast
-			new Notice('🎯 正在生成学习路径大纲...', 3000);
+        // 显示生成中的Toast + 状态栏进行中任务
+        new Notice('🎯 正在生成学习路径大纲...', 3000);
+        const outlineTaskId = `lp-outline-${Date.now()}`;
+        this.plugin.statusBarManager?.showTaskStatus(outlineTaskId, TaskStatus.GENERATING, 10, '学习路径 - 生成大纲中...');
 
-			// 生成大纲
-			const { LearningPathGenerator } = await import('../learningPath/LearningPathGenerator');
-			const generator = new LearningPathGenerator(this.app, this.plugin);
-			const outline = await generator.generateOutline(config);
+        // 生成大纲
+        const { LearningPathGenerator } = await import('../learningPath/LearningPathGenerator');
+        const generator = new LearningPathGenerator(this.app, this.plugin);
+        const outline = await generator.generateOutline(config);
 
-			// 打开预览模态框
-			this.openPathPreviewModal(outline, config);
+        // 打开预览模态框
+        this.openPathPreviewModal(outline, config);
 
-		} catch (error) {
-			console.error('生成学习路径大纲失败:', error);
-			new Notice(`生成大纲失败: ${error.message}`);
-		}
-	}
+        // 预览弹窗出现后，当前进行中的任务消失
+        this.plugin.statusBarManager?.hideTask(outlineTaskId);
+
+    } catch (error) {
+        console.error('生成学习路径大纲失败:', error);
+        new Notice(`生成大纲失败: ${error.message}`);
+        // 出错时也隐藏进行中状态
+        try { this.plugin.statusBarManager?.hide(); } catch {}
+    }
+}
 
 	/**
 	 * 打开路径预览模态框

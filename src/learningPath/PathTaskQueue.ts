@@ -1,5 +1,6 @@
 import { Notice, TFile } from 'obsidian';
 import { App } from 'obsidian';
+import { TaskStatus } from '../types';
 import NotebookLLMPlugin from '../main';
 import { LearningPathConfig, LearningPathOutline, PathGenerationTask } from './types';
 import { LearningPathGenerator } from './LearningPathGenerator';
@@ -189,23 +190,33 @@ export class PathTaskQueue {
 				throw new Error('没有启用的文件需要创建');
 			}
 
-			// 确保目标目录存在
-			const targetDir = `${config.targetDirectory}/${task.outline!.title}`;
-			await this.ensureDirectoryExists(targetDir);
+        // 确保目标目录存在
+        const targetDir = `${config.targetDirectory}/${task.outline!.title}`;
+        await this.ensureDirectoryExists(targetDir);
 
-			// 逐个生成文件
-			for (let i = 0; i < totalFiles; i++) {
-				const file = enabledFiles[i];
-				const fileProgress = 30 + (i / totalFiles) * 60; // 30% - 90%
+        // 逐个生成文件
+        const activeTaskId = `lp-create-${taskId}`;
+        for (let i = 0; i < totalFiles; i++) {
+            const file = enabledFiles[i];
+            const fileProgress = 30 + (i / totalFiles) * 60; // 30% - 90%
 
-				task.currentFile = file.title;
-				task.progress = Math.round(fileProgress);
-				logger?.appendSection('开始生成文件', {
-					filename: file.filename,
-					title: file.title,
-					index: i + 1,
-					total: totalFiles
-				});
+            task.currentFile = file.title;
+            task.progress = Math.round(fileProgress);
+            // 状态栏显示进行中的具体文件
+            try {
+                this.plugin.statusBarManager?.showTaskStatus(
+                    activeTaskId,
+                    TaskStatus.GENERATING,
+                    task.progress,
+                    `学习路径：正在创建 "${file.title}" (${i + 1}/${totalFiles})`
+                );
+            } catch {}
+            logger?.appendSection('开始生成文件', {
+                filename: file.filename,
+                title: file.title,
+                index: i + 1,
+                total: totalFiles
+            });
 
 				try {
 					// 生成文件内容
@@ -233,29 +244,31 @@ export class PathTaskQueue {
 				}
 			}
 
-			// 任务完成
-			console.log('学习路径任务完成:', taskId, '创建文件数:', task.createdFiles?.length || 0);
-			task.status = 'completed';
-			task.progress = 100;
-			task.endTime = Date.now();
-			task.currentFile = '完成';
-			logger?.appendSection('任务完成', {
-				createdFiles: task.createdFiles,
-				totalFiles
-			});
+        // 任务完成
+        console.log('学习路径任务完成:', taskId, '创建文件数:', task.createdFiles?.length || 0);
+        task.status = 'completed';
+        task.progress = 100;
+        task.endTime = Date.now();
+        task.currentFile = '完成';
+        try { this.plugin.statusBarManager?.hideTask(activeTaskId); } catch {}
+        logger?.appendSection('任务完成', {
+            createdFiles: task.createdFiles,
+            totalFiles
+        });
 
 			// 显示完成通知
 			this.showCompletionNotice(task);
 
-		} catch (error) {
-			logger?.appendSection('任务失败', {
-				message: (error as any)?.message || String(error)
-			});
-			throw error;
-		} finally {
-			await logger?.flush();
-		}
-	}
+        } catch (error) {
+            logger?.appendSection('任务失败', {
+                message: (error as any)?.message || String(error)
+            });
+            try { this.plugin.statusBarManager?.hide(); } catch {}
+            throw error;
+        } finally {
+            await logger?.flush();
+        }
+    }
 
 	/**
 	 * 显示完成通知
