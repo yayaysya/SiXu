@@ -4911,22 +4911,39 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 打开路径预览模态框
 	 */
-	private openPathPreviewModal(outline: LearningPathOutline, config: LearningPathConfig): void {
-		const modal = new PathPreviewModal(
-			this.app,
-			outline,
-			config,
-			(confirmedOutline, confirmedConfig) => {
-				// 确认创建，启动后台任务
-				this.confirmPathCreation(confirmedOutline, confirmedConfig);
-			},
-			() => {
-				// 返回修改
-				this.openCreatePathModal();
-			}
-		);
-		modal.open();
-	}
+private openPathPreviewModal(outline: LearningPathOutline, config: LearningPathConfig): void {
+    const tray = this.plugin.pendingTaskManager;
+    const resumeId = `resume-path-preview-${Date.now()}`;
+    const resumeOpen = () => {
+        const modal = new PathPreviewModal(
+            this.app,
+            outline,
+            config,
+            (confirmedOutline, confirmedConfig) => {
+                // 确认创建，启动后台任务
+                this.confirmPathCreation(confirmedOutline, confirmedConfig);
+                tray?.removeTask(resumeId);
+            },
+            () => {
+                // 返回修改
+                tray?.removeTask(resumeId);
+                this.openCreatePathModal();
+            }
+        );
+        modal.open();
+    };
+
+    tray?.addTask({
+        id: resumeId,
+        title: `学习地图确认：${outline.title}`,
+        subtitle: `位置 ${config.targetDirectory}/${outline.title}`,
+        kind: 'learning-path-preview',
+        createdAt: Date.now(),
+        resume: resumeOpen,
+        cancel: () => {}
+    });
+    resumeOpen();
+}
 
 	/**
 	 * 确认创建学习路径

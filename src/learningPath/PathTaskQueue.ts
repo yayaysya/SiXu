@@ -285,31 +285,56 @@ export class PathTaskQueue {
 	/**
 	 * 显示完成通知模态框
 	 */
-	private async showCompletionModal(task: PathGenerationTask): Promise<void> {
-		try {
-			console.log('准备显示完成通知模态框:', task.outline?.title);
-			// 动态导入PathCompletionNotice以避免循环依赖
-			const { PathCompletionNotice } = await import('../components/PathCompletionNotice');
+private async showCompletionModal(task: PathGenerationTask): Promise<void> {
+    try {
+        console.log('准备显示完成通知模态框:', task.outline?.title);
+        // 动态导入PathCompletionNotice以避免循环依赖
+        const { PathCompletionNotice } = await import('../components/PathCompletionNotice');
 
-			const modal = new PathCompletionNotice(
-				this.app,
-				task.config,
-				task.outline!,
-				task.createdFiles || [],
-				this.plugin,
-				() => {
-					console.log('完成通知模态框已关闭');
-					// 通知关闭后的回调
-				}
-			);
-			console.log('打开完成通知模态框');
-			modal.open();
-		} catch (error) {
-			console.error('显示完成通知模态框失败:', error);
-			// 如果模态框显示失败，至少显示一个简单的通知
-			new Notice('学习路径创建完成！可在文件浏览器中查看生成的文件。');
-		}
-	}
+        const modal = new PathCompletionNotice(
+            this.app,
+            task.config,
+            task.outline!,
+            task.createdFiles || [],
+            this.plugin,
+            () => {
+                console.log('完成通知模态框已关闭');
+                // 通知关闭后的回调
+            }
+        );
+        console.log('打开完成通知模态框');
+        // 在状态栏托盘中注册可恢复的“生成结果”任务
+        const tray = this.plugin.pendingTaskManager;
+        const resumeId = `resume-path-complete-${task.id}`;
+        const resumeOpen = () => {
+            const m = new PathCompletionNotice(
+                this.app,
+                task.config,
+                task.outline!,
+                task.createdFiles || [],
+                this.plugin,
+                () => {
+                    console.log('完成通知模态框已关闭');
+                }
+            );
+            m.open();
+        };
+        tray?.addTask({
+            id: resumeId,
+            title: `学习路径完成：${task.outline!.title}`,
+            subtitle: `${task.createdFiles?.length || 0} 个文件已生成`,
+            kind: 'learning-path-result',
+            createdAt: Date.now(),
+            resume: resumeOpen,
+            cancel: () => {}
+        });
+        modal.open();
+    } catch (error) {
+        console.error('显示完成通知模态框失败:', error);
+        // 如果模态框显示失败，至少显示一个简单的通知
+        new Notice('学习路径创建完成！可在文件浏览器中查看生成的文件。');
+    }
+}
 
 	/**
 	 * 任务完成回调
