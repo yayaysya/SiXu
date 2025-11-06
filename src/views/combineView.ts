@@ -4867,6 +4867,14 @@ export class CombineNotesView extends ItemView {
 	 */
 	private async startPathGeneration(config: LearningPathConfig): Promise<void> {
 		try {
+			// 验证文本模型的 API Key 配置，避免进入生成流程后才失败
+			const provider = this.plugin.settings.textProvider;
+			const providerConfig = this.plugin.settings.providers.text[provider];
+			if (!providerConfig?.apiKey) {
+				new Notice(`❌ 请先在设置中配置 ${provider} 的 API Key`);
+				return;
+			}
+
 			// 显示生成中的Toast
 			new Notice('🎯 正在生成学习路径大纲...', 3000);
 

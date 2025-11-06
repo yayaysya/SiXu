@@ -9,6 +9,7 @@ import {
 	DEFAULT_FILE_OPTIONS,
 	FILE_TYPE_LABELS
 } from './types';
+import { DebugMarkdownLogger } from '../utils/DebugMarkdown';
 
 /**
  * AI 学习路径生成器
@@ -25,16 +26,34 @@ export class LearningPathGenerator {
 	/**
 	 * 生成学习路径大纲
 	 */
-	async generateOutline(config: LearningPathConfig): Promise<LearningPathOutline> {
+	async generateOutline(config: LearningPathConfig, logger?: DebugMarkdownLogger): Promise<LearningPathOutline> {
 		const prompt = this.buildOutlinePrompt(config);
+		const systemPrompt = '你是一位经验丰富的教育专家，擅长设计结构化的学习路径和课程大纲。';
+
+		let runLogger = logger;
+		let shouldFlush = false;
+		if (!runLogger && this.plugin.settings.debugEnabled) {
+			runLogger = this.createLogger('学习路径大纲生成调试日志', {
+				topic: config.topic,
+				depth: config.depth,
+				textProvider: this.plugin.settings.textProvider,
+				textModel: this.plugin.settings.textModel
+			});
+			shouldFlush = !!runLogger;
+		}
+
+		runLogger?.appendSection('提示词', {
+			system: systemPrompt,
+			user: prompt
+		});
 
 		// 创建文本模型provider
 		const { createTextProvider } = await import('../api/factory');
-		const provider = createTextProvider(this.plugin.settings);
+		const provider = createTextProvider(this.plugin.settings, runLogger);
 
 		try {
 			const response = await provider.generateText(
-				'你是一位经验丰富的教育专家，擅长设计结构化的学习路径和课程大纲。',
+				systemPrompt,
 				prompt,
 				{
 					temperature: DEFAULT_GENERATION_PARAMS.temperature,
@@ -43,10 +62,20 @@ export class LearningPathGenerator {
 				}
 			);
 
-			return this.parseOutlineResponse(response, config);
+			runLogger?.appendSection('模型原始响应', response);
+
+			return this.parseOutlineResponse(response, config, runLogger);
 		} catch (error) {
 			console.error('生成学习路径大纲失败:', error);
+			runLogger?.appendSection('错误', {
+				stage: 'generateOutline',
+				message: (error as any)?.message || String(error)
+			});
 			throw new Error(`生成大纲失败: ${error.message}`);
+		} finally {
+			if (shouldFlush && runLogger) {
+				await runLogger.flush();
+			}
 		}
 	}
 
@@ -56,17 +85,37 @@ export class LearningPathGenerator {
 	async generateFileContent(
 		file: LearningPathFile,
 		outline: LearningPathOutline,
-		config: LearningPathConfig
+		config: LearningPathConfig,
+		logger?: DebugMarkdownLogger
 	): Promise<string> {
 		const prompt = this.buildFileContentPrompt(file, outline, config);
+		const systemPrompt = '你是一位专业的教育内容创作者，擅长编写高质量的学习材料。';
+
+		let runLogger = logger;
+		let shouldFlush = false;
+		if (!runLogger && this.plugin.settings.debugEnabled) {
+			runLogger = this.createLogger('学习路径文件生成调试日志', {
+				file: file.filename,
+				fileTitle: file.title,
+				topic: config.topic,
+				textProvider: this.plugin.settings.textProvider,
+				textModel: this.plugin.settings.textModel
+			});
+			shouldFlush = !!runLogger;
+		}
+
+		runLogger?.appendSection('提示词', {
+			system: systemPrompt,
+			user: prompt
+		});
 
 		// 创建文本模型provider
 		const { createTextProvider } = await import('../api/factory');
-		const provider = createTextProvider(this.plugin.settings);
+		const provider = createTextProvider(this.plugin.settings, runLogger);
 
 		try {
 			const response = await provider.generateText(
-				'你是一位专业的教育内容创作者，擅长编写高质量的学习材料。',
+				systemPrompt,
 				prompt,
 				{
 					temperature: DEFAULT_GENERATION_PARAMS.temperature,
@@ -75,10 +124,21 @@ export class LearningPathGenerator {
 				}
 			);
 
-			return this.parseFileContentResponse(response, file.type);
+			runLogger?.appendSection('模型原始响应', response);
+
+			return this.parseFileContentResponse(response, file.type, runLogger);
 		} catch (error) {
 			console.error(`生成文件内容失败 (${file.filename}):`, error);
+			runLogger?.appendSection('错误', {
+				stage: 'generateFileContent',
+				file: file.filename,
+				message: (error as any)?.message || String(error)
+			});
 			throw new Error(`生成 ${file.filename} 失败: ${error.message}`);
+		} finally {
+			if (shouldFlush && runLogger) {
+				await runLogger.flush();
+			}
 		}
 	}
 
@@ -88,11 +148,24 @@ export class LearningPathGenerator {
 	async createLearningPath(
 		outline: LearningPathOutline,
 		config: LearningPathConfig,
-		progressCallback?: (progress: number, currentFile: string) => void
+		progressCallback?: (progress: number, currentFile: string) => void,
+		logger?: DebugMarkdownLogger
 	): Promise<string[]> {
 		const enabledFiles = outline.files.filter(f => f.enabled);
 		const totalFiles = enabledFiles.length;
 		const createdFiles: string[] = [];
+
+		let runLogger = logger;
+		let shouldFlush = false;
+		if (!runLogger && this.plugin.settings.debugEnabled) {
+			runLogger = this.createLogger('学习路径内容生成调试日志', {
+				topic: config.topic,
+				depth: config.depth,
+				targetDirectory: config.targetDirectory,
+				files: enabledFiles.length
+			});
+			shouldFlush = !!runLogger;
+		}
 
 		// 确保目标目录存在
 		const targetDir = `${config.targetDirectory}/${outline.title}`;
@@ -103,23 +176,46 @@ export class LearningPathGenerator {
 			const progress = Math.round((i / totalFiles) * 100);
 
 			progressCallback?.(progress, file.title);
+			runLogger?.appendSection('开始生成文件', {
+				filename: file.filename,
+				title: file.title,
+				index: i + 1,
+				total: totalFiles
+			});
 
 			try {
 				// 生成文件内容
-				file.content = await this.generateFileContent(file, outline, config);
+				file.content = await this.generateFileContent(file, outline, config, runLogger);
 
 				// 创建文件
 				const filePath = `${targetDir}/${file.filename}`;
 				await this.createMarkdownFile(filePath, file, outline, config);
 				createdFiles.push(filePath);
+				runLogger?.appendSection('文件创建完成', {
+					filePath,
+					length: file.content?.length || 0
+				});
 
 			} catch (error) {
 				console.error(`创建文件失败 (${file.filename}):`, error);
+				runLogger?.appendSection('文件创建失败', {
+					filename: file.filename,
+					title: file.title,
+					message: (error as any)?.message || String(error)
+				});
 				throw new Error(`创建 ${file.filename} 失败: ${error.message}`);
 			}
 		}
 
 		progressCallback?.(100, '完成');
+		runLogger?.appendSection('任务完成', {
+			createdFiles,
+			totalFiles
+		});
+
+		if (shouldFlush && runLogger) {
+			await runLogger.flush();
+		}
 		return createdFiles;
 	}
 
@@ -218,14 +314,27 @@ ${typeInstructions[file.type]}
 	/**
 	 * 解析大纲响应
 	 */
-	private parseOutlineResponse(response: string, config: LearningPathConfig): LearningPathOutline {
+	private parseOutlineResponse(response: string, config: LearningPathConfig, logger?: DebugMarkdownLogger): LearningPathOutline {
 		try {
-			// 尝试提取 JSON 代码块
-			const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-			let jsonStr = jsonMatch ? jsonMatch[1] : response;
+			let jsonStr = response.trim();
 
-			// 清理可能的 markdown 格式
-			jsonStr = jsonStr.trim();
+			// 优先匹配 ```json ``` 代码块（忽略大小写）
+			const jsonBlock = response.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+			if (jsonBlock?.[1]) {
+				jsonStr = jsonBlock[1].trim();
+			}
+
+			// 如果仍然包含 Markdown 代码块标记，去除它们
+			jsonStr = jsonStr.replace(/^```[a-zA-Z]*\s*/, '').replace(/\s*```$/, '').trim();
+
+			// 如果开头不是 {，尝试截取第一个 {...} 片段
+			if (!jsonStr.startsWith('{')) {
+				const firstBrace = jsonStr.indexOf('{');
+				const lastBrace = jsonStr.lastIndexOf('}');
+				if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+					jsonStr = jsonStr.slice(firstBrace, lastBrace + 1).trim();
+				}
+			}
 
 			// 解析 JSON
 			const parsed = JSON.parse(jsonStr);
@@ -253,15 +362,23 @@ ${typeInstructions[file.type]}
 			// 按order排序
 			parsed.files.sort((a: LearningPathFile, b: LearningPathFile) => a.order - b.order);
 
-			return {
+			const outline = {
 				title: parsed.title,
 				description: parsed.description || `学习${config.topic}的完整路径`,
 				files: parsed.files,
 				estimatedHours: parsed.estimatedHours || 2
 			};
 
+			logger?.appendSection('解析后的大纲', outline);
+
+			return outline;
+
 		} catch (error) {
 			console.error('解析大纲响应失败:', error);
+			logger?.appendSection('解析大纲失败', {
+				message: (error as any)?.message || String(error),
+				responsePreview: response.slice(0, 200)
+			});
 			throw new Error(`解析大纲失败: ${error.message}`);
 		}
 	}
@@ -269,7 +386,7 @@ ${typeInstructions[file.type]}
 	/**
 	 * 解析文件内容响应
 	 */
-	private parseFileContentResponse(response: string, fileType: string): string {
+	private parseFileContentResponse(response: string, fileType: string, logger?: DebugMarkdownLogger): string {
 		try {
 			// 清理响应
 			let content = response.trim();
@@ -286,12 +403,35 @@ ${typeInstructions[file.type]}
 				throw new Error('生成的内容过短，可能生成失败');
 			}
 
+			logger?.appendSection('解析后的内容', {
+				fileType,
+				preview: content.slice(0, 400)
+			});
+
 			return content;
 
 		} catch (error) {
 			console.error('解析文件内容响应失败:', error);
+			logger?.appendSection('解析内容失败', {
+				fileType,
+				message: (error as any)?.message || String(error)
+			});
 			throw new Error(`解析内容失败: ${error.message}`);
 		}
+	}
+
+	private createLogger(title: string, context: Record<string, any>): DebugMarkdownLogger | undefined {
+		if (!this.plugin.settings.debugEnabled) return undefined;
+		const logger = new DebugMarkdownLogger(this.app, title);
+		const enrichedContext: Record<string, any> = { ...context };
+		if (!('textProvider' in enrichedContext)) {
+			enrichedContext.textProvider = this.plugin.settings.textProvider;
+		}
+		if (!('textModel' in enrichedContext)) {
+			enrichedContext.textModel = this.plugin.settings.textModel;
+		}
+		logger.appendSection('运行上下文', enrichedContext);
+		return logger;
 	}
 
 	/**

@@ -3,6 +3,7 @@ import { App } from 'obsidian';
 import NotebookLLMPlugin from '../main';
 import { LearningPathConfig, LearningPathOutline, PathGenerationTask } from './types';
 import { LearningPathGenerator } from './LearningPathGenerator';
+import { DebugMarkdownLogger } from '../utils/DebugMarkdown';
 
 /**
  * 学习路径任务队列管理器
@@ -140,69 +141,120 @@ export class PathTaskQueue {
 		const { config, outline } = task;
 		console.log('任务配置:', { topic: config.topic, depth: config.depth });
 
-		// 阶段1: 生成大纲
-		if (!outline) {
-			task.status = 'generating-outline';
-			task.progress = 10;
+		let logger: DebugMarkdownLogger | undefined;
+		if (this.plugin.settings.debugEnabled) {
+			logger = new DebugMarkdownLogger(this.app, '学习路径调试日志');
+			logger.appendSection('任务上下文', {
+				taskId,
+				topic: config.topic,
+				depth: config.depth,
+				targetDirectory: config.targetDirectory,
+				textProvider: this.plugin.settings.textProvider,
+				textModel: this.plugin.settings.textModel
+			});
+		}
 
-			try {
-				task.outline = await this.generator.generateOutline(config);
-				task.progress = 30;
-			} catch (error) {
-				throw new Error(`生成大纲失败: ${error.message}`);
+		try {
+			// 阶段1: 生成大纲
+			if (!outline) {
+				task.status = 'generating-outline';
+				task.progress = 10;
+				logger?.appendMarkdown('\n开始生成学习路径大纲…');
+
+				try {
+					task.outline = await this.generator.generateOutline(config, logger);
+					task.progress = 30;
+					logger?.appendSection('大纲生成完成', {
+						files: task.outline.files.map(f => ({ filename: f.filename, title: f.title, enabled: f.enabled }))
+					});
+				} catch (error) {
+					logger?.appendSection('大纲生成失败', {
+						message: (error as any)?.message || String(error)
+					});
+					throw new Error(`生成大纲失败: ${error.message}`);
+				}
+			} else {
+				task.progress = 30; // 如果已有大纲，跳过此阶段
+				logger?.appendSection('使用已有大纲', {
+					files: outline.files.map(f => ({ filename: f.filename, title: f.title, enabled: f.enabled }))
+				});
 			}
-		} else {
-			task.progress = 30; // 如果已有大纲，跳过此阶段
-		}
 
-		// 阶段2: 生成内容并创建文件
-		task.status = 'creating-files';
-		const enabledFiles = task.outline!.files.filter(f => f.enabled);
-		const totalFiles = enabledFiles.length;
+			// 阶段2: 生成内容并创建文件
+			task.status = 'creating-files';
+			const enabledFiles = task.outline!.files.filter(f => f.enabled);
+			const totalFiles = enabledFiles.length;
 
-		if (totalFiles === 0) {
-			throw new Error('没有启用的文件需要创建');
-		}
-
-		// 确保目标目录存在
-		const targetDir = `${config.targetDirectory}/${task.outline!.title}`;
-		await this.ensureDirectoryExists(targetDir);
-
-		// 逐个生成文件
-		for (let i = 0; i < totalFiles; i++) {
-			const file = enabledFiles[i];
-			const fileProgress = 30 + (i / totalFiles) * 60; // 30% - 90%
-
-			task.currentFile = file.title;
-			task.progress = Math.round(fileProgress);
-
-			try {
-				// 生成文件内容
-				file.content = await this.generator.generateFileContent(file, task.outline!, config);
-
-				// 创建文件
-				const filePath = `${targetDir}/${file.filename}`;
-				await this.createMarkdownFile(filePath, file, task.outline!, config);
-
-				// 记录已创建的文件
-				if (!task.createdFiles) task.createdFiles = [];
-				task.createdFiles.push(filePath);
-
-			} catch (error) {
-				throw new Error(`创建文件 ${file.filename} 失败: ${error.message}`);
+			if (totalFiles === 0) {
+				throw new Error('没有启用的文件需要创建');
 			}
+
+			// 确保目标目录存在
+			const targetDir = `${config.targetDirectory}/${task.outline!.title}`;
+			await this.ensureDirectoryExists(targetDir);
+
+			// 逐个生成文件
+			for (let i = 0; i < totalFiles; i++) {
+				const file = enabledFiles[i];
+				const fileProgress = 30 + (i / totalFiles) * 60; // 30% - 90%
+
+				task.currentFile = file.title;
+				task.progress = Math.round(fileProgress);
+				logger?.appendSection('开始生成文件', {
+					filename: file.filename,
+					title: file.title,
+					index: i + 1,
+					total: totalFiles
+				});
+
+				try {
+					// 生成文件内容
+					file.content = await this.generator.generateFileContent(file, task.outline!, config, logger);
+
+					// 创建文件
+					const filePath = `${targetDir}/${file.filename}`;
+					await this.createMarkdownFile(filePath, file, task.outline!, config);
+
+					// 记录已创建的文件
+					if (!task.createdFiles) task.createdFiles = [];
+					task.createdFiles.push(filePath);
+					logger?.appendSection('文件创建完成', {
+						filePath,
+						length: file.content?.length || 0
+					});
+
+				} catch (error) {
+					logger?.appendSection('文件创建失败', {
+						filename: file.filename,
+						title: file.title,
+						message: (error as any)?.message || String(error)
+					});
+					throw new Error(`创建文件 ${file.filename} 失败: ${error.message}`);
+				}
+			}
+
+			// 任务完成
+			console.log('学习路径任务完成:', taskId, '创建文件数:', task.createdFiles?.length || 0);
+			task.status = 'completed';
+			task.progress = 100;
+			task.endTime = Date.now();
+			task.currentFile = '完成';
+			logger?.appendSection('任务完成', {
+				createdFiles: task.createdFiles,
+				totalFiles
+			});
+
+			// 显示完成通知
+			this.showCompletionNotice(task);
+
+		} catch (error) {
+			logger?.appendSection('任务失败', {
+				message: (error as any)?.message || String(error)
+			});
+			throw error;
+		} finally {
+			await logger?.flush();
 		}
-
-		// 任务完成
-		console.log('学习路径任务完成:', taskId, '创建文件数:', task.createdFiles?.length || 0);
-		task.status = 'completed';
-		task.progress = 100;
-		task.endTime = Date.now();
-		task.currentFile = '完成';
-
-		// 显示完成通知
-		this.showCompletionNotice(task);
-
 	}
 
 	/**

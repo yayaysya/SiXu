@@ -114,7 +114,7 @@ export const DEPTH_LABELS: Record<string, string> = {
  * 默认生成参数
  */
 export const DEFAULT_GENERATION_PARAMS: PathGenerationParams = {
-	maxTokens: 2000,
+	maxTokens: 4000,
 	temperature: 0.7,
 	includeExamples: true,
 	teachingStyle: 'direct'
