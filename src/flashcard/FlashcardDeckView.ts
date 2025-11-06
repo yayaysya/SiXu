@@ -441,26 +441,44 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 				}, 3000);
 			}
 
-			new ConfirmFlashcardsModal(
-				this.app,
-				cards,
-				async (confirmedCards) => {
-					if (confirmedCards.length > 0) {
-						// 更新卡组统计
-						deck.cardIds = confirmedCards.map(c => c.id);
-						deck.stats.total = confirmedCards.length;
-						deck.stats.new = confirmedCards.length;
+				// 注册可恢复任务并打开确认弹窗
+				const tray = this.plugin.pendingTaskManager;
+				const resumeTaskId = `resume-fc-${Date.now()}`;
+				const openConfirm = () => {
+					new ConfirmFlashcardsModal(
+						this.app,
+						cards,
+						async (confirmedCards) => {
+							if (confirmedCards.length > 0) {
+								// 更新卡组统计
+								deck.cardIds = confirmedCards.map(c => c.id);
+								deck.stats.total = confirmedCards.length;
+								deck.stats.new = confirmedCards.length;
 
-						// 保存
-						await this.storage.saveDeck(deck, confirmedCards);
-						new Notice(`创建成功！共 ${confirmedCards.length} 张卡片`);
+								// 保存
+								await this.storage.saveDeck(deck, confirmedCards);
+								new Notice(`创建成功！共 ${confirmedCards.length} 张卡片`);
 
-						// 刷新列表
-						await this.loadDecks();
-						this.render();
-					}
-				}
-			).open();
+								// 刷新列表
+								await this.loadDecks();
+								this.render();
+							}
+							// 完成后从任务托盘移除
+							tray?.removeTask(resumeTaskId);
+						}
+					).open();
+				};
+
+				tray?.addTask({
+					id: resumeTaskId,
+					title: `确认闪卡（${cards.length} 张）`,
+					subtitle: deck.name,
+					kind: 'flashcard-confirm',
+					createdAt: Date.now(),
+					resume: openConfirm,
+					cancel: () => {}
+				});
+				openConfirm();
 		} catch (error) {
 			this.progressCard?.destroy();
 			this.progressCard = null;

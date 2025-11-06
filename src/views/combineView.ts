@@ -3953,23 +3953,39 @@ export class CombineNotesView extends ItemView {
 
 					const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
 
-					// 显示确认对话框
-                    const confirmModal = new ConfirmFlashcardsModal(
-                        this.app,
-                        result.cards,
-                        async (selectedCards: Flashcard[]) => {
-                            if (selectedCards.length > 0) {
-                                // 同步选择结果到 deck，再保存
-                                result.deck.cardIds = selectedCards.map(c => c.id);
-                                result.deck.stats.total = selectedCards.length;
-                                result.deck.stats.new = selectedCards.length;
-                                await storage.saveDeck(result.deck, selectedCards);
-                                new Notice(`✅ 成功创建卡组，包含 ${selectedCards.length} 张卡片`);
-                                this.render(); // 刷新列表
-                            }
-                        }
-                    );
-					confirmModal.open();
+						// 通过任务托盘可恢复确认对话框
+						const tray = this.plugin.pendingTaskManager;
+						const resumeTaskId = `resume-fc-${Date.now()}`;
+						const openConfirm = () => {
+			                    const confirmModal = new ConfirmFlashcardsModal(
+			                        this.app,
+			                        result.cards,
+			                        async (selectedCards: Flashcard[]) => {
+			                            if (selectedCards.length > 0) {
+			                                // 同步选择结果到 deck，再保存
+			                                result.deck.cardIds = selectedCards.map(c => c.id);
+			                                result.deck.stats.total = selectedCards.length;
+			                                result.deck.stats.new = selectedCards.length;
+			                                await storage.saveDeck(result.deck, selectedCards);
+			                                new Notice(`✅ 成功创建卡组，包含 ${selectedCards.length} 张卡片`);
+			                                this.render(); // 刷新列表
+			                            }
+			                            tray?.removeTask(resumeTaskId);
+			                        }
+			                    );
+							confirmModal.open();
+						};
+
+						tray?.addTask({
+							id: resumeTaskId,
+							title: `确认闪卡（${result.cards.length} 张）`,
+							subtitle: deckName,
+							kind: 'flashcard-confirm',
+							createdAt: Date.now(),
+							resume: openConfirm,
+							cancel: () => {}
+						});
+						openConfirm();
 
 				} catch (error) {
 					// 清理进度卡片

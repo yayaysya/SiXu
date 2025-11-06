@@ -242,6 +242,19 @@ export interface ProcessTask {
 }
 
 /**
+ * 可恢复的未完成交互任务（用于状态栏任务托盘）
+ */
+export interface ResumeTaskItem {
+  id: string;                 // 任务唯一标识
+  title: string;              // 主标题
+  subtitle?: string;          // 副标题
+  kind?: string;              // 任务类型标记，例如 'flashcard-confirm'
+  createdAt: number;          // 创建时间戳
+  resume: () => void;         // 执行恢复逻辑（重新打开对应流程）
+  cancel?: () => void;        // 可选：取消/清理回调
+}
+
+/**
  * 任务状态
  */
 export enum TaskStatus {

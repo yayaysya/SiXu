@@ -9,13 +9,15 @@ import { ImageProcessor } from './processors/image';
 import { LinkProcessor } from './processors/link';
 import { TextProcessor } from './processors/text';
 import { TaskQueue, StatusBarManager } from './taskQueue';
+import PendingTaskManager from './ui/PendingTaskManager';
 import { getTemplate } from './prompts/templates';
 import { CombineNotesView, COMBINE_VIEW_TYPE } from './views/combineView';
 
 export default class NotebookLLMPlugin extends Plugin {
-	settings: NotebookLLMSettings;
-	taskQueue: TaskQueue;
-	statusBarManager: StatusBarManager;
+    settings: NotebookLLMSettings;
+    taskQueue: TaskQueue;
+    statusBarManager: StatusBarManager;
+    pendingTaskManager: PendingTaskManager;
 
 	async onload() {
 		await this.loadSettings();
@@ -29,10 +31,14 @@ export default class NotebookLLMPlugin extends Plugin {
 		// 初始化任务队列
 		this.taskQueue = new TaskQueue();
 
-		// 添加状态栏
-		const statusBarItem = this.addStatusBarItem();
-		statusBarItem.style.display = 'none';
-		this.statusBarManager = new StatusBarManager(statusBarItem);
+			// 添加状态栏
+			const statusBarItem = this.addStatusBarItem();
+			statusBarItem.style.display = 'none';
+			this.statusBarManager = new StatusBarManager(statusBarItem);
+
+			// 添加任务托盘（常驻图标）
+			const trayStatusBarItem = this.addStatusBarItem();
+			this.pendingTaskManager = new PendingTaskManager(this.app, trayStatusBarItem);
 
 		// 添加命令 - 打开组合笔记侧边栏
 		this.addCommand({

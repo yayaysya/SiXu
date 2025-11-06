@@ -6229,3 +6229,61 @@ button.mod-cta:hover {
     padding: 8px 10px;
     resize: vertical;
 }
+
+/* ===== 任务托盘与弹出层（PendingTaskManager） ===== */
+.nb-task-tray {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    opacity: 0.75;
+}
+.nb-task-tray.has-tasks { opacity: 1; }
+.nb-task-tray .nb-task-tray-icon { width: 16px; height: 16px; }
+.nb-task-counter {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    background: var(--color-accent);
+    color: var(--text-on-accent, #fff);
+    border-radius: 10px;
+    padding: 0 4px;
+    font-size: 10px;
+    line-height: 14px;
+    min-width: 14px;
+    text-align: center;
+    display: none;
+}
+
+.nb-task-popover {
+    background: var(--background-primary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    min-width: 240px;
+    max-width: 360px;
+    z-index: 9999;
+    overflow: hidden;
+}
+.nb-task-popover-header {
+    font-weight: 600;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+.nb-task-list { max-height: 320px; overflow-y: auto; }
+.nb-task-empty { padding: 12px; color: var(--text-muted); }
+.nb-task-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+.nb-task-item:last-child { border-bottom: none; }
+.nb-task-info { min-width: 0; }
+.nb-task-title { font-size: 13px; font-weight: 600; }
+.nb-task-subtitle { font-size: 12px; color: var(--text-muted); }
+.nb-task-actions button { margin-left: 8px; }
