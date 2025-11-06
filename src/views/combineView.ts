@@ -3731,6 +3731,33 @@ export class CombineNotesView extends ItemView {
             await this.startStudying(deck.id);
         });
 
+        // 右上角更多菜单（与 FlashcardDeckView 保持一致）
+        const moreWrap = overlay.createDiv({ cls: 'deck-more-wrap' });
+        const moreBtn = moreWrap.createEl('button', { cls: 'deck-more-btn clickable-icon', attr: { 'aria-label': '更多操作' } });
+        setIcon(moreBtn, 'ellipsis-vertical');
+
+        let menuEl: HTMLElement | null = null;
+        const hideMenu = () => { menuEl?.remove(); menuEl = null; window.removeEventListener('click', onOutside, true); };
+        const onOutside = (ev: MouseEvent) => {
+            if (!menuEl) return; const target = ev.target as Node;
+            if (!menuEl.contains(target) && !moreBtn.contains(target)) hideMenu();
+        };
+        const showMenu = () => {
+            if (menuEl) { hideMenu(); return; }
+            menuEl = document.createElement('div');
+            menuEl.className = 'deck-card-menu';
+            const mkItem = (text: string, action: () => void) => {
+                const item = document.createElement('div');
+                item.className = 'deck-card-menu-item'; item.textContent = text;
+                item.addEventListener('click', (e) => { e.stopPropagation(); hideMenu(); action(); });
+                menuEl!.appendChild(item);
+            };
+            mkItem('重命名', () => this.renameDeckInCombine(deck, storage));
+            mkItem('编辑', () => this.editDeckInCombine(deck, storage));
+            mkItem('删除', () => this.deleteDeckInCombine(deck, storage));
+            moreWrap.appendChild(menuEl); window.addEventListener('click', onOutside, true);
+        };
+        moreBtn.addEventListener('click', (e) => { e.stopPropagation(); showMenu(); });
     }
 
 	/**
@@ -3775,6 +3802,73 @@ export class CombineNotesView extends ItemView {
 			new Notice(`开始学习失败: ${error.message}`);
 		}
 	}
+
+    // === Flashcard: 卡组卡片右上角菜单（Combine 视图） ===
+    private async renameDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        const modal = new (class extends Modal {
+            private initName = deck.name; private onOk: (n: string) => void;
+            constructor(app: App, onOk: (n: string) => void) { super(app); this.onOk = onOk; }
+            onOpen() {
+                const el = this.contentEl; el.empty();
+                this.modalEl.addClass('rename-deck-modal');
+                el.createEl('h3', { text: '重命名卡组' });
+                const input = el.createEl('input', { type: 'text' }) as HTMLInputElement;
+                input.style.width = '100%'; input.value = this.initName; setTimeout(()=>input.focus(),50);
+                const btns = el.createDiv({ cls: 'modal-button-container' });
+                const cancel = btns.createEl('button', { text: '取消' });
+                const ok = btns.createEl('button', { text: '确认', cls: 'mod-cta' });
+                cancel.addEventListener('click', ()=>this.close());
+                ok.addEventListener('click', ()=>{ const name=input.value.trim(); if(name){ this.onOk(name); this.close(); }});
+                input.addEventListener('keypress', (e)=>{ if(e.key==='Enter') ok.click(); });
+            }
+        })(this.app, async (newName) => {
+            const loaded = await storage.loadDeck(deck.id);
+            if (!loaded) { new Notice('未找到卡组数据'); return; }
+            const d = loaded.deck; const cs = loaded.cards;
+            d.name = newName;
+            await storage.saveDeck(d, cs);
+            this.render(); new Notice('名称已更新');
+        });
+        modal.open();
+    }
+
+    private async editDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        const loaded = await storage.loadDeck(deck.id); if (!loaded) { new Notice('未找到卡组数据'); return; }
+        const editor = new (class extends Modal {
+            private d: FlashcardDeck; private cs: Flashcard[]; private sel: Set<string>;
+            private onSave: (deck: FlashcardDeck, cards: Flashcard[]) => void;
+            constructor(app: App, d: FlashcardDeck, cs: Flashcard[], onSave: (deck: FlashcardDeck, cards: Flashcard[]) => void){
+                super(app); this.d = { ...d }; this.cs = cs.map(c=>({ ...c })); this.sel = new Set(cs.map(c=>c.id)); this.onSave=onSave;
+            }
+            onOpen(){ const el=this.contentEl; el.empty(); this.modalEl.addClass('deck-editor-modal'); this.modalEl.style.maxWidth='900px';
+                el.createEl('h3',{text:`编辑卡组：${this.d.name}`}); const list=el.createDiv({cls:'deck-editor-list'}); list.style.maxHeight='520px'; list.style.overflowY='auto';
+                this.cs.forEach((card,idx)=>{ const row=list.createDiv({cls:'deck-editor-item'});
+                    const cb=row.createEl('input',{type:'checkbox'}) as HTMLInputElement; cb.checked=this.sel.has(card.id); cb.addEventListener('change',()=>{ if(cb.checked)this.sel.add(card.id); else this.sel.delete(card.id); });
+                    const main=row.createDiv({cls:'deck-editor-main'}); main.createDiv({cls:'q',text:`Q${idx+1}: ${card.question.replace(/\n/g,' ').slice(0,80)}`}); main.createDiv({cls:'a',text:`A: ${card.answer.replace(/\n/g,' ').slice(0,100)}`});
+                    const actions=row.createDiv({cls:'deck-editor-actions'}); const edit=actions.createEl('button',{text:'编辑'}); const del=actions.createEl('button',{text:'删除'});
+                    edit.addEventListener('click',()=>{ new (class extends Modal{ private q=card.question; private a=card.answer; private ok:(q:string,a:string)=>void; constructor(app:App,ok:(q:string,a:string)=>void){ super(app); this.ok=ok; }
+                        onOpen(){ const e=this.contentEl; e.empty(); this.modalEl.addClass('edit-flashcard-modal'); this.modalEl.style.maxWidth='720px'; e.createEl('h3',{text:'编辑闪卡'});
+                            const qg=e.createDiv({cls:'setting-item'}); qg.createDiv({text:'问题 (Q)',cls:'setting-item-name'}); const q=qg.createEl('textarea'); q.value=this.q; q.rows=3; q.style.width='100%';
+                            const ag=e.createDiv({cls:'setting-item'}); ag.createDiv({text:'答案 (A)',cls:'setting-item-name'}); const a=ag.createEl('textarea'); a.value=this.a; a.rows=4; a.style.width='100%';
+                            const bs=e.createDiv({cls:'modal-button-container'}); const cancel=bs.createEl('button',{text:'取消'}); const ok=bs.createEl('button',{text:'确认',cls:'mod-cta'});
+                            cancel.addEventListener('click',()=>this.close()); ok.addEventListener('click',()=>{ this.ok(q.value.trim(), a.value.trim()); this.close(); }); }
+                    })(this.app,(newQ,newA)=>{ card.question=newQ; card.answer=newA; this.onOpen(); }).open(); });
+                    del.addEventListener('click',()=>{ this.sel.delete(card.id); this.cs=this.cs.filter(c=>c.id!==card.id); this.onOpen(); });
+                });
+                const footer=el.createDiv({cls:'modal-button-container'}); const cancel=footer.createEl('button',{text:'取消'}); const save=footer.createEl('button',{text:'保存更改',cls:'mod-cta'});
+                cancel.addEventListener('click',()=>this.close()); save.addEventListener('click',()=>{ const kept=this.cs.filter(c=>this.sel.has(c.id)); this.onSave(this.d, kept); this.close(); });
+            }
+        })(this.app, loaded.deck, loaded.cards, async (updatedDeck, updatedCards) => {
+            await storage.saveDeck(updatedDeck, updatedCards); this.render(); new Notice('已保存更改');
+        });
+        editor.open();
+    }
+
+    private async deleteDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        new (class extends Modal { constructor(app:App, private ok:()=>void){ super(app);} onOpen(){ const e=this.contentEl; e.empty(); this.modalEl.addClass('side-modal-card'); e.createEl('h3',{text:'确认操作'}); const m=e.createDiv({cls:'side-modal-message'}); m.setText(`确定删除卡组“${deck.name}”吗？此操作不可恢复（含数据文件）`); const a=e.createDiv({cls:'side-modal-actions'}); const c=a.createEl('button',{text:'取消'}); const o=a.createEl('button',{text:'删除',cls:'mod-cta'}); c.addEventListener('click',()=>this.close()); o.addEventListener('click',()=>{ this.ok(); this.close(); }); } })(this.app, async ()=>{
+            await storage.deleteDeck(deck.id); this.render(); new Notice('已删除卡组');
+        }).open();
+    }
 
 
 
@@ -4975,11 +5069,11 @@ private openPathPreviewModal(outline: LearningPathOutline, config: LearningPathC
 	/**
 	 * 显示路径完成通知
 	 */
-	private showPathCompletionNotice(
-		config: LearningPathConfig,
-		outline: LearningPathOutline,
-		createdFiles: string[]
-	): void {
+    private showPathCompletionNotice(
+        config: LearningPathConfig,
+        outline: LearningPathOutline,
+        createdFiles: string[]
+    ): void {
 		const modal = new PathCompletionNotice(
 			this.app,
 			config,
@@ -5126,6 +5220,7 @@ class QuizGenerationModal extends Modal {
 /**
  * 简易文件选择器（用于选择生成 Quiz 的源笔记）
  */
+/* DUPLICATE-START: Erroneously inserted duplicate class; keep commented to avoid TS errors
 class FilePickerModal extends Modal {
     private files: TFile[];
     private onChoose: (file: TFile | null) => void;
@@ -5137,6 +5232,59 @@ class FilePickerModal extends Modal {
         super(app);
         this.files = files;
         this.onChoose = onChoose;
+    }
+
+    // === Flashcard: 菜单动作（Combine 视图专用） ===
+    private async renameDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        const modal = new (class extends Modal {
+            private initName = deck.name; private onOk: (n: string) => void;
+            constructor(app: App, onOk: (n: string) => void) { super(app); this.onOk = onOk; }
+            onOpen() { const el = this.contentEl; el.empty(); el.createEl('h3', { text: '重命名卡组' });
+                const input = el.createEl('input', { type: 'text' }) as HTMLInputElement; input.style.width='100%'; input.value=this.initName; setTimeout(()=>input.focus(),50);
+                const btns = el.createDiv({ cls: 'modal-button-container' }); const cancel=btns.createEl('button',{text:'取消'}); const ok=btns.createEl('button',{text:'确认', cls:'mod-cta'});
+                cancel.addEventListener('click',()=>this.close()); ok.addEventListener('click',()=>{ const name=input.value.trim(); if(name){ this.onOk(name); this.close(); }});
+                input.addEventListener('keypress',(e)=>{ if(e.key==='Enter') ok.click(); }); }
+        })(this.app, async (newName) => {
+            const data = await storage.loadDeck(deck.id); if (!data) { new Notice('未找到卡组数据'); return; }
+            data.deck.name = newName; await storage.saveDeck(data.deck, data.cards);
+            this.render(); new Notice('名称已更新');
+        });
+        modal.open();
+    }
+
+    private async editDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        const data = await storage.loadDeck(deck.id); if (!data) { new Notice('未找到卡组数据'); return; }
+        const editor = new (class extends Modal {
+            private d = { ...data.deck }; private cs = data.cards.map(c=>({ ...c })); private sel = new Set<string>(data.cards.map(c=>c.id));
+            private onSave: (deck: FlashcardDeck, cards: Flashcard[]) => void; constructor(app: App, onSave: (deck: FlashcardDeck, cards: Flashcard[]) => void){ super(app); this.onSave=onSave; }
+            onOpen(){ const el=this.contentEl; el.empty(); this.modalEl.addClass('deck-editor-modal'); this.modalEl.style.maxWidth='900px';
+                el.createEl('h3',{text:`编辑卡组：${this.d.name}`}); const list=el.createDiv({cls:'deck-editor-list'}); list.style.maxHeight='520px'; list.style.overflowY='auto';
+                this.cs.forEach((card,idx)=>{ const row=list.createDiv({cls:'deck-editor-item'});
+                    const cb=row.createEl('input',{type:'checkbox'}) as HTMLInputElement; cb.checked=this.sel.has(card.id); cb.addEventListener('change',()=>{ if(cb.checked)this.sel.add(card.id); else this.sel.delete(card.id); });
+                    const main=row.createDiv({cls:'deck-editor-main'}); main.createDiv({cls:'q',text:`Q${idx+1}: ${card.question.replace(/\n/g,' ').slice(0,80)}`}); main.createDiv({cls:'a',text:`A: ${card.answer.replace(/\n/g,' ').slice(0,100)}`});
+                    const actions=row.createDiv({cls:'deck-editor-actions'}); const edit=actions.createEl('button',{text:'编辑'}); const del=actions.createEl('button',{text:'删除'});
+                    edit.addEventListener('click',()=>{ new (class extends Modal{ private q=card.question; private a=card.answer; private ok:(q:string,a:string)=>void; constructor(app:App,ok:(q:string,a:string)=>void){ super(app); this.ok=ok; }
+                        onOpen(){ const e=this.contentEl; e.empty(); this.modalEl.addClass('edit-flashcard-modal'); this.modalEl.style.maxWidth='720px'; e.createEl('h3',{text:'编辑闪卡'});
+                            const qg=e.createDiv({cls:'setting-item'}); qg.createDiv({text:'问题 (Q)',cls:'setting-item-name'}); const q=qg.createEl('textarea'); q.value=this.q; q.rows=3; q.style.width='100%';
+                            const ag=e.createDiv({cls:'setting-item'}); ag.createDiv({text:'答案 (A)',cls:'setting-item-name'}); const a=ag.createEl('textarea'); a.value=this.a; a.rows=4; a.style.width='100%';
+                            const bs=e.createDiv({cls:'modal-button-container'}); const cancel=bs.createEl('button',{text:'取消'}); const ok=bs.createEl('button',{text:'确认',cls:'mod-cta'});
+                            cancel.addEventListener('click',()=>this.close()); ok.addEventListener('click',()=>{ this.ok(q.value.trim(), a.value.trim()); this.close(); }); }
+                    })(this.app,(newQ,newA)=>{ card.question=newQ; card.answer=newA; this.onOpen(); }).open(); });
+                    del.addEventListener('click',()=>{ this.sel.delete(card.id); this.cs=this.cs.filter(c=>c.id!==card.id); this.onOpen(); });
+                });
+                const footer=el.createDiv({cls:'modal-button-container'}); const cancel=footer.createEl('button',{text:'取消'}); const save=footer.createEl('button',{text:'保存更改',cls:'mod-cta'});
+                cancel.addEventListener('click',()=>this.close()); save.addEventListener('click',()=>{ const kept=this.cs.filter(c=>this.sel.has(c.id)); this.onSave(this.d, kept); this.close(); });
+            }
+        })(this.app, async (updatedDeck, updatedCards) => {
+            await storage.saveDeck(updatedDeck, updatedCards); this.render(); new Notice('已保存更改');
+        });
+        editor.open();
+    }
+
+    private async deleteDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        new (class extends Modal { constructor(app:App, private ok:()=>void){ super(app);} onOpen(){ const e=this.contentEl; e.empty(); this.modalEl.addClass('side-modal-card'); e.createEl('h3',{text:'确认操作'}); const m=e.createDiv({cls:'side-modal-message'}); m.setText(`确定删除卡组“${deck.name}”吗？此操作不可恢复（含数据文件）`); const a=e.createDiv({cls:'side-modal-actions'}); const c=a.createEl('button',{text:'取消'}); const o=a.createEl('button',{text:'删除',cls:'mod-cta'}); c.addEventListener('click',()=>this.close()); o.addEventListener('click',()=>{ this.ok(); this.close(); }); } })(this.app, async ()=>{
+            await storage.deleteDeck(deck.id); this.render(); new Notice('已删除卡组');
+        }).open();
     }
 
     onOpen(): void {
@@ -5180,6 +5328,117 @@ class FilePickerModal extends Modal {
             const item = this.listContainer.createDiv({ cls: 'file-list-item' });
             item.createDiv({ cls: 'file-name', text: file.basename });
             // 仅展示文件名，不展示路径
+            item.addEventListener('click', () => { this.selected = file; this.close(); });
+        });
+    }
+
+    onClose(): void {
+        const { contentEl } = this;
+        contentEl.empty();
+        this.onChoose(this.selected);
+    }
+
+    // === Flashcard: 菜单动作（Combine 视图专用） ===
+    private async renameDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        const modal = new (class extends Modal {
+            private initName = deck.name; private onOk: (n: string) => void;
+            constructor(app: App, onOk: (n: string) => void) { super(app); this.onOk = onOk; }
+            onOpen() { const el = this.contentEl; el.empty(); el.createEl('h3', { text: '重命名卡组' });
+                const input = el.createEl('input', { type: 'text' }) as HTMLInputElement; input.style.width='100%'; input.value=this.initName; setTimeout(()=>input.focus(),50);
+                const btns = el.createDiv({ cls: 'modal-button-container' }); const cancel=btns.createEl('button',{text:'取消'}); const ok=btns.createEl('button',{text:'确认', cls:'mod-cta'});
+                cancel.addEventListener('click',()=>this.close()); ok.addEventListener('click',()=>{ const name=input.value.trim(); if(name){ this.onOk(name); this.close(); }});
+                input.addEventListener('keypress',(e)=>{ if(e.key==='Enter') ok.click(); }); }
+        })(this.app, async (newName) => {
+            const data = await storage.loadDeck(deck.id); if (!data) { new Notice('未找到卡组数据'); return; }
+            data.deck.name = newName; await storage.saveDeck(data.deck, data.cards);
+            this.render(); new Notice('名称已更新');
+        });
+        modal.open();
+    }
+
+    private async editDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        const data = await storage.loadDeck(deck.id); if (!data) { new Notice('未找到卡组数据'); return; }
+        const editor = new (class extends Modal {
+            private d = { ...data.deck }; private cs = data.cards.map(c=>({ ...c })); private sel = new Set<string>(data.cards.map(c=>c.id));
+            private onSave: (deck: FlashcardDeck, cards: Flashcard[]) => void; constructor(app: App, onSave: (deck: FlashcardDeck, cards: Flashcard[]) => void){ super(app); this.onSave=onSave; }
+            onOpen(){ const el=this.contentEl; el.empty(); this.modalEl.addClass('deck-editor-modal'); this.modalEl.style.maxWidth='900px';
+                el.createEl('h3',{text:`编辑卡组：${this.d.name}`}); const list=el.createDiv({cls:'deck-editor-list'}); list.style.maxHeight='520px'; list.style.overflowY='auto';
+                this.cs.forEach((card,idx)=>{ const row=list.createDiv({cls:'deck-editor-item'});
+                    const cb=row.createEl('input',{type:'checkbox'}) as HTMLInputElement; cb.checked=this.sel.has(card.id); cb.addEventListener('change',()=>{ if(cb.checked)this.sel.add(card.id); else this.sel.delete(card.id); });
+                    const main=row.createDiv({cls:'deck-editor-main'}); main.createDiv({cls:'q',text:`Q${idx+1}: ${card.question.replace(/\n/g,' ').slice(0,80)}`}); main.createDiv({cls:'a',text:`A: ${card.answer.replace(/\n/g,' ').slice(0,100)}`});
+                    const actions=row.createDiv({cls:'deck-editor-actions'}); const edit=actions.createEl('button',{text:'编辑'}); const del=actions.createEl('button',{text:'删除'});
+                    edit.addEventListener('click',()=>{ new (class extends Modal{ private q=card.question; private a=card.answer; private ok:(q:string,a:string)=>void; constructor(app:App,ok:(q:string,a:string)=>void){ super(app); this.ok=ok; }
+                        onOpen(){ const e=this.contentEl; e.empty(); this.modalEl.addClass('edit-flashcard-modal'); this.modalEl.style.maxWidth='720px'; e.createEl('h3',{text:'编辑闪卡'});
+                            const qg=e.createDiv({cls:'setting-item'}); qg.createDiv({text:'问题 (Q)',cls:'setting-item-name'}); const q=qg.createEl('textarea'); q.value=this.q; q.rows=3; q.style.width='100%';
+                            const ag=e.createDiv({cls:'setting-item'}); ag.createDiv({text:'答案 (A)',cls:'setting-item-name'}); const a=ag.createEl('textarea'); a.value=this.a; a.rows=4; a.style.width='100%';
+                            const bs=e.createDiv({cls:'modal-button-container'}); const cancel=bs.createEl('button',{text:'取消'}); const ok=bs.createEl('button',{text:'确认',cls:'mod-cta'});
+                            cancel.addEventListener('click',()=>this.close()); ok.addEventListener('click',()=>{ this.ok(q.value.trim(), a.value.trim()); this.close(); }); }
+                    })(this.app,(newQ,newA)=>{ card.question=newQ; card.answer=newA; this.onOpen(); }).open(); });
+                    del.addEventListener('click',()=>{ this.sel.delete(card.id); this.cs=this.cs.filter(c=>c.id!==card.id); this.onOpen(); });
+                });
+                const footer=el.createDiv({cls:'modal-button-container'}); const cancel=footer.createEl('button',{text:'取消'}); const save=footer.createEl('button',{text:'保存更改',cls:'mod-cta'});
+                cancel.addEventListener('click',()=>this.close()); save.addEventListener('click',()=>{ const kept=this.cs.filter(c=>this.sel.has(c.id)); this.onSave(this.d, kept); this.close(); });
+            }
+        })(this.app, async (updatedDeck, updatedCards) => {
+            await storage.saveDeck(updatedDeck, updatedCards); this.render(); new Notice('已保存更改');
+        });
+        editor.open();
+    }
+
+    private async deleteDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
+        new (class extends Modal { constructor(app:App, private ok:()=>void){ super(app);} onOpen(){ const e=this.contentEl; e.empty(); this.modalEl.addClass('side-modal-card'); e.createEl('h3',{text:'确认操作'}); const m=e.createDiv({cls:'side-modal-message'}); m.setText(`确定删除卡组“${deck.name}”吗？此操作不可恢复（含数据文件）`); const a=e.createDiv({cls:'side-modal-actions'}); const c=a.createEl('button',{text:'取消'}); const o=a.createEl('button',{text:'删除',cls:'mod-cta'}); c.addEventListener('click',()=>this.close()); o.addEventListener('click',()=>{ this.ok(); this.close(); }); } })(this.app, async ()=>{
+            await storage.deleteDeck(deck.id); this.render(); new Notice('已删除卡组');
+        }).open();
+    }
+}
+DUPLICATE-END */
+
+class FilePickerModal extends Modal {
+    private files: TFile[];
+    private onChoose: (file: TFile | null) => void;
+    private selected: TFile | null = null;
+    private listContainer!: HTMLElement;
+    private searchInput!: HTMLInputElement;
+
+    constructor(app: App, files: TFile[], onChoose: (file: TFile | null) => void) {
+        super(app);
+        this.files = files;
+        this.onChoose = onChoose;
+    }
+
+    onOpen(): void {
+        const { contentEl } = this;
+        contentEl.empty();
+        this.modalEl.addClass('side-modal-card');
+        contentEl.createEl('h3', { text: '选择源笔记' });
+
+        const searchWrap = contentEl.createDiv({ cls: 'setting-item' });
+        searchWrap.createDiv({ text: '筛选', cls: 'setting-item-name' });
+        this.searchInput = searchWrap.createEl('input', { type: 'text', placeholder: '输入关键词过滤…' });
+        this.searchInput.addEventListener('input', () => this.renderList());
+
+        this.listContainer = contentEl.createDiv({ cls: 'file-list-container' });
+        this.renderList();
+
+        const btns = contentEl.createDiv({ cls: 'modal-button-container' });
+        const cancelBtn = btns.createEl('button', { text: '取消' });
+        cancelBtn.addEventListener('click', () => { this.selected = null; this.close(); });
+    }
+
+    private renderList(): void {
+        this.listContainer.empty();
+        const keyword = (this.searchInput?.value || '').trim().toLowerCase();
+        const filtered = keyword ? this.files.filter(f => f.basename.toLowerCase().includes(keyword) || f.path.toLowerCase().includes(keyword)) : this.files;
+
+        if (filtered.length === 0) {
+            this.listContainer.createDiv({ text: '未找到匹配的笔记', cls: 'nb-empty-state' });
+            return;
+        }
+
+        filtered.sort((a, b) => b.stat.mtime - a.stat.mtime);
+        filtered.slice(0, 200).forEach(file => {
+            const item = this.listContainer.createDiv({ cls: 'file-list-item' });
+            item.createDiv({ cls: 'file-name', text: file.basename });
             item.addEventListener('click', () => { this.selected = file; this.close(); });
         });
     }

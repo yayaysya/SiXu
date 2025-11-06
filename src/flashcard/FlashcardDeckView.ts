@@ -266,6 +266,44 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 			this.startStudy(deck);
 		});
 
+		// 右上角“更多”菜单（三竖点）
+		const moreWrap = overlay.createDiv({ cls: 'deck-more-wrap' });
+		const moreBtn = moreWrap.createEl('button', { cls: 'deck-more-btn clickable-icon', attr: { 'aria-label': '更多操作' } });
+		setIcon(moreBtn, 'ellipsis-vertical');
+
+		// 弹出菜单
+		let menuEl: HTMLElement | null = null;
+		const hideMenu = () => {
+			menuEl?.remove();
+			menuEl = null;
+			window.removeEventListener('click', onOutside, true);
+		};
+		const onOutside = (ev: MouseEvent) => {
+			if (!menuEl) return;
+			const target = ev.target as Node;
+			if (!menuEl.contains(target) && !moreBtn.contains(target)) hideMenu();
+		};
+
+		const showMenu = () => {
+			if (menuEl) { hideMenu(); return; }
+			menuEl = document.createElement('div');
+			menuEl.className = 'deck-card-menu';
+			const mkItem = (text: string, action: () => void) => {
+				const item = document.createElement('div');
+				item.className = 'deck-card-menu-item';
+				item.textContent = text;
+				item.addEventListener('click', (e) => { e.stopPropagation(); hideMenu(); action(); });
+				menuEl!.appendChild(item);
+			};
+			mkItem('重命名', () => this.renameDeck(deck));
+			mkItem('编辑', () => this.openDeckEditor(deck));
+			mkItem('删除', () => this.confirmDeleteSingleDeck(deck));
+			moreWrap.appendChild(menuEl);
+			window.addEventListener('click', onOutside, true);
+		};
+
+		moreBtn.addEventListener('click', (e) => { e.stopPropagation(); showMenu(); });
+
 		// 在批量管理模式下隐藏单独“选择”按钮，统一使用左侧复选框
 		if (!this.deckSelectionMode) {
 			const selectBtn = actions.createEl('button', { text: isSelected ? '✓ 已选' : '选择', cls: 'deck-btn' });
@@ -274,6 +312,52 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 				this.toggleDeckSelection(deck.id);
 			});
 		}
+	}
+
+	private async confirmDeleteSingleDeck(deck: FlashcardDeck) {
+		new ConfirmExitModal(
+			this.app,
+			`确定删除卡组“${deck.name}”吗？此操作不可恢复（含数据文件）`,
+			'取消',
+			'删除',
+			async () => {
+				try {
+					await this.storage.deleteDeck(deck.id);
+					new Notice('已删除卡组');
+					await this.loadDecks();
+					this.render();
+				} catch (e) {
+					console.error('删除卡组失败:', e);
+					new Notice('删除失败');
+				}
+			}
+		).open();
+	}
+
+	private async renameDeck(deck: FlashcardDeck) {
+		const data = await this.storage.loadDeck(deck.id);
+		if (!data) { new Notice('未找到卡组数据'); return; }
+		const modal = new RenameDeckModal(this.app, deck.name, async (newName) => {
+			const { deck: d, cards } = data;
+			d.name = newName.trim();
+			await this.storage.saveDeck(d, cards);
+			await this.loadDecks();
+			this.render();
+			new Notice('名称已更新');
+		});
+		modal.open();
+	}
+
+	private async openDeckEditor(deck: FlashcardDeck) {
+		const data = await this.storage.loadDeck(deck.id);
+		if (!data) { new Notice('未找到卡组数据'); return; }
+		const editor = new DeckEditorModal(this.app, data.deck, data.cards, async (updatedDeck, updatedCards) => {
+			await this.storage.saveDeck(updatedDeck, updatedCards);
+			await this.loadDecks();
+			this.render();
+			new Notice('已保存更改');
+		});
+		editor.open();
 	}
 
 	/**
@@ -1143,6 +1227,120 @@ class EditFlashcardModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 	}
+}
+
+/**
+ * 重命名卡组
+ */
+class RenameDeckModal extends Modal {
+    private initName: string;
+    private onSubmit: (newName: string) => void;
+
+    constructor(app: App, currentName: string, onSubmit: (newName: string) => void) {
+        super(app);
+        this.initName = currentName;
+        this.onSubmit = onSubmit;
+    }
+
+    onOpen(): void {
+        const { contentEl } = this;
+        contentEl.empty();
+        this.modalEl.addClass('rename-deck-modal');
+        contentEl.createEl('h3', { text: '重命名卡组' });
+        const input = contentEl.createEl('input', { type: 'text' });
+        input.style.width = '100%';
+        input.value = this.initName;
+        setTimeout(() => input.focus(), 50);
+
+        const btns = contentEl.createDiv({ cls: 'modal-button-container' });
+        const cancelBtn = btns.createEl('button', { text: '取消' });
+        const okBtn = btns.createEl('button', { text: '确认', cls: 'mod-cta' });
+
+        cancelBtn.addEventListener('click', () => this.close());
+        okBtn.addEventListener('click', () => {
+            const name = input.value.trim();
+            if (!name) return;
+            this.onSubmit(name);
+            this.close();
+        });
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') okBtn.click();
+        });
+    }
+
+    onClose(): void { this.contentEl.empty(); }
+}
+
+/**
+ * 卡组编辑器：列出所有卡片，支持勾选保留、编辑Q/A
+ */
+class DeckEditorModal extends Modal {
+    private deck: FlashcardDeck;
+    private cards: Flashcard[];
+    private onSave: (deck: FlashcardDeck, cards: Flashcard[]) => void | Promise<void>;
+    private selected: Set<string> = new Set();
+
+    constructor(app: App, deck: FlashcardDeck, cards: Flashcard[], onSave: (deck: FlashcardDeck, cards: Flashcard[]) => void | Promise<void>) {
+        super(app);
+        this.deck = { ...deck };
+        this.cards = cards.map(c => ({ ...c }));
+        this.selected = new Set(this.cards.map(c => c.id));
+        this.onSave = onSave;
+    }
+
+    onOpen(): void {
+        const { contentEl } = this;
+        contentEl.empty();
+        this.modalEl.addClass('deck-editor-modal');
+        this.modalEl.style.maxWidth = '900px';
+        contentEl.createEl('h3', { text: `编辑卡组：${this.deck.name}` });
+
+        const list = contentEl.createDiv({ cls: 'deck-editor-list' });
+        list.style.maxHeight = '520px';
+        list.style.overflowY = 'auto';
+
+        this.cards.forEach((card, idx) => {
+            const row = list.createDiv({ cls: 'deck-editor-item' });
+            const checkbox = row.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+            checkbox.checked = this.selected.has(card.id);
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) this.selected.add(card.id); else this.selected.delete(card.id);
+            });
+
+            const main = row.createDiv({ cls: 'deck-editor-main' });
+            main.createDiv({ cls: 'q', text: `Q${idx + 1}: ${card.question.replace(/\n/g, ' ').slice(0, 80)}` });
+            main.createDiv({ cls: 'a', text: `A: ${card.answer.replace(/\n/g, ' ').slice(0, 100)}` });
+
+            const actions = row.createDiv({ cls: 'deck-editor-actions' });
+            const editBtn = actions.createEl('button', { text: '编辑' });
+            const delBtn = actions.createEl('button', { text: '删除' });
+            editBtn.addEventListener('click', () => {
+                new EditFlashcardModal(this.app, card.question, card.answer, (newQ, newA) => {
+                    card.question = newQ;
+                    card.answer = newA;
+                    this.onOpen();
+                }).open();
+            });
+            delBtn.addEventListener('click', () => {
+                this.selected.delete(card.id);
+                this.cards = this.cards.filter(c => c.id !== card.id);
+                this.onOpen();
+            });
+        });
+
+        const footer = contentEl.createDiv({ cls: 'modal-button-container' });
+        const cancel = footer.createEl('button', { text: '取消' });
+        const save = footer.createEl('button', { text: '保存更改', cls: 'mod-cta' });
+        cancel.addEventListener('click', () => this.close());
+        save.addEventListener('click', async () => {
+            const kept = this.cards.filter(c => this.selected.has(c.id));
+            // 更新卡组统计由 storage.saveDeck 内部完成
+            await this.onSave(this.deck, kept);
+            this.close();
+        });
+    }
+
+    onClose(): void { this.contentEl.empty(); }
 }
 
 /**

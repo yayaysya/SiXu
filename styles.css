@@ -6288,3 +6288,38 @@ button.mod-cta:hover {
 .nb-task-title { font-size: 13px; font-weight: 600; }
 .nb-task-subtitle { font-size: 12px; color: var(--text-muted); }
 .nb-task-actions button { margin-left: 8px; }
+
+/* === 闪卡卡组：右上角三竖点菜单 === */
+.deck-more-wrap { position: absolute; top: 8px; right: 8px; }
+.deck-more-btn {
+  width: 24px; height: 24px; padding: 0; border: none !important; outline: none;
+  background: transparent !important; box-shadow: none !important; border-radius: 0;
+  color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+}
+.deck-more-btn:hover { background: transparent !important; color: #fff; }
+.deck-more-btn .svg-icon { width: 18px; height: 18px; }
+.deck-more-btn .svg-icon, .deck-more-btn .svg-icon * { stroke: #fff !important; fill: #fff !important; }
+.deck-card-menu {
+  position: absolute; right: 0; top: 28px; z-index: 10000;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  min-width: 140px; padding: 6px 0;
+}
+.deck-card-menu-item { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.deck-card-menu-item:hover { background: var(--background-modifier-hover); }
+
+/* === 卡组编辑器 === */
+.deck-editor-modal .deck-editor-list { margin-top: 8px; }
+.deck-editor-item { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--background-modifier-border); }
+.deck-editor-item:last-child { border-bottom: none; }
+.deck-editor-main .q { font-weight: 600; }
+.deck-editor-main .a { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.deck-editor-actions button { margin-left: 8px; }
+
+/* 重命名弹窗 */
+.rename-deck-modal input { width: 100%; padding: 6px 8px; border: 1px solid var(--background-modifier-border); border-radius: 6px; }
+
+/* ===== 全局 Modal 间距微调 ===== */
+.modal-header { margin-bottom: 10px !important; }
+.modal-button-container { margin-top: 10px !important; }
