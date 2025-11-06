@@ -507,56 +507,98 @@ ${noteContent}
 	/**
 	 * 解析 AI 响应
 	 */
-	private parseAIResponse(response: string, logger?: DebugMarkdownLogger, section?: string): AIFlashcardResponse {
-		const scope = section || '整篇笔记';
-		try {
-			// 尝试提取 JSON 代码块
-			const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-			let jsonStr = jsonMatch ? jsonMatch[1] : response;
+    private parseAIResponse(response: string, logger?: DebugMarkdownLogger, section?: string): AIFlashcardResponse {
+        const scope = section || '整篇笔记';
 
-			// 清理可能的 markdown 格式
-			jsonStr = jsonStr.trim();
+        // 尝试更鲁棒地从响应中提取 JSON 字符串，避免被内部 ```html 等代码块提前截断
+        const extractJsonString = (resp: string): string | null => {
+            // 1) 优先匹配 ```json ... ```（大小写不敏感），并使用“最后一个 ```”作为结束
+            const jsonFenceIdx = resp.search(/```json\b/i);
+            if (jsonFenceIdx >= 0) {
+                const match = resp.match(/```json\b/i);
+                const start = jsonFenceIdx + (match ? match[0].length : 7);
+                const end = resp.lastIndexOf('```');
+                if (end > start) {
+                    return resp.slice(start, end).trim();
+                }
+            }
 
-			// 解析 JSON
-			const parsed = JSON.parse(jsonStr);
+            // 2) 退化到通用围栏：取第一个 ``` 与最后一个 ``` 之间的内容
+            const firstFence = resp.indexOf('```');
+            const lastFence = resp.lastIndexOf('```');
+            if (firstFence >= 0 && lastFence > firstFence) {
+                // 尝试跳过语言标记（例如 ```json\n）
+                const afterFirst = resp.slice(firstFence + 3);
+                const langLineBreak = afterFirst.indexOf('\n');
+                const start = langLineBreak >= 0 ? firstFence + 3 + langLineBreak + 1 : firstFence + 3;
+                return resp.slice(start, lastFence).trim();
+            }
 
-			// 验证格式
-			if (!parsed.cards || !Array.isArray(parsed.cards)) {
-				throw new Error('响应格式无效：缺少 cards 数组');
-			}
+            // 3) 再退化：基于花括号平衡从第一个 { 到匹配的 } 之间提取
+            const startBrace = resp.indexOf('{');
+            if (startBrace >= 0) {
+                let inString = false;
+                let escaped = false;
+                let depth = 0;
+                for (let i = startBrace; i < resp.length; i++) {
+                    const ch = resp[i];
+                    if (inString) {
+                        if (escaped) {
+                            escaped = false;
+                        } else if (ch === '\\') {
+                            escaped = true;
+                        } else if (ch === '"') {
+                            inString = false;
+                        }
+                        continue;
+                    } else {
+                        if (ch === '"') {
+                            inString = true;
+                            continue;
+                        }
+                        if (ch === '{') depth++;
+                        if (ch === '}') {
+                            depth--;
+                            if (depth === 0) {
+                                return resp.slice(startBrace, i + 1).trim();
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        };
 
-			// 验证每个卡片
-			parsed.cards.forEach((card: any, index: number) => {
-				if (!card.question || !card.answer) {
-					throw new Error(`卡片 ${index + 1} 缺少问题或答案`);
-				}
-				// 确保有 sourceSection
-				if (!card.sourceSection) {
-					card.sourceSection = '未分类';
-				}
-				// 确保有 tags
-				if (!card.tags || !Array.isArray(card.tags)) {
-					card.tags = [];
-				}
-			});
+        try {
+            const jsonStr = (extractJsonString(response) || response).trim();
+            const parsed = JSON.parse(jsonStr);
 
-			logger?.appendSection('解析后的闪卡', {
-				section: scope,
-				cardCount: parsed.cards.length
-			});
+            if (!parsed.cards || !Array.isArray(parsed.cards)) {
+                throw new Error('响应格式无效：缺少 cards 数组');
+            }
 
-			return parsed;
-		} catch (error) {
-			console.error('解析 AI 响应失败:', error);
-			console.log('原始响应:', response);
-			logger?.appendSection('解析闪卡失败', {
-				section: scope,
-				message: (error as any)?.message || String(error),
-				responsePreview: response.slice(0, 400)
-			});
-			throw new Error(`解析 AI 响应失败: ${error.message}`);
-		}
-	}
+            // 规范化每个卡片
+            parsed.cards.forEach((card: any, index: number) => {
+                if (!card.question || !card.answer) {
+                    throw new Error(`卡片 ${index + 1} 缺少问题或答案`);
+                }
+                if (!card.sourceSection) card.sourceSection = '未分类';
+                if (!card.tags || !Array.isArray(card.tags)) card.tags = [];
+            });
+
+            logger?.appendSection('解析后的闪卡', { section: scope, cardCount: parsed.cards.length });
+            return parsed;
+        } catch (error) {
+            console.error('解析 AI 响应失败:', error);
+            const previewSource = response.length > 600 ? `${response.slice(0, 300)}\n...\n${response.slice(-300)}` : response;
+            logger?.appendSection('解析闪卡失败', {
+                section: scope,
+                message: (error as any)?.message || String(error),
+                responsePreview: previewSource
+            });
+            throw new Error(`解析 AI 响应失败: ${error.message}`);
+        }
+    }
 
 	/**
 	 * 从学习路径批量生成闪卡
