@@ -413,6 +413,24 @@ private async showCompletionModal(task: PathGenerationTask): Promise<void> {
 			tags: ['learning-path', config.topic, file.type]
 		};
 
+		// 将 metadata 序列化为 YAML：数组使用多行列表，其余字符串加引号
+		const escape = (s: string) => s.replace(/\"/g, '\\"');
+		const yamlLines: string[] = [];
+		for (const [key, value] of Object.entries(metadata)) {
+			if (Array.isArray(value)) {
+				yamlLines.push(`${key}:`);
+				for (const item of value) {
+					yamlLines.push(`  - \"${escape(String(item))}\"`);
+				}
+			} else if (typeof value === 'string') {
+				yamlLines.push(`${key}: \"${escape(value)}\"`);
+			} else {
+				yamlLines.push(`${key}: ${value}`);
+			}
+		}
+
+		return `---\n${yamlLines.join('\n')}\n---`;
+
 		const yamlString = Object.entries(metadata)
 			.map(([key, value]) => `${key}: ${typeof value === 'string' ? `"${value}"` : value}`)
 			.join('\n');
