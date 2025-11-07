@@ -14,6 +14,7 @@ import { PathCompletionNotice } from '../components/PathCompletionNotice';
 import { LearningPathConfig, LearningPathOutline } from '../learningPath/types';
 import { PathTaskQueue } from '../learningPath/PathTaskQueue';
 import { UserProfileView } from '../components/profile/UserProfileView';
+import { ActivityListModal } from '../components/ActivityListModal';
 
 export const COMBINE_VIEW_TYPE = 'notebook-llm-combine-view';
 
@@ -67,6 +68,8 @@ export class CombineNotesView extends ItemView {
 
 	// 新的页面导航状态
 	private currentPage: ViewPage = 'home';
+	// 简易返回栈：记录来源上下文（页面 + 学习子状态）
+	private navigationStack: Array<{ page: ViewPage; learningState?: LearningViewState }> = [];
 	private learningState: LearningViewState = 'hub';
 
 	// 统计管理器
@@ -1886,12 +1889,12 @@ export class CombineNotesView extends ItemView {
 	private renderBottomNavigation(container: HTMLElement): void {
 		const navBar = container.createDiv({ cls: 'bottom-navigation' });
 
-		const pages: Array<{ page: ViewPage; icon: string; label: string }> = [
-			{ page: 'home', icon: 'home', label: '思序' },
-			{ page: 'organize', icon: 'file-edit', label: '整理' },
-			{ page: 'learning', icon: 'graduation-cap', label: '学习' },
-			{ page: 'profile', icon: 'user', label: '我的' }
-		];
+			const pages: Array<{ page: ViewPage; icon: string; label: string }> = [
+				{ page: 'home', icon: 'home', label: '首页' },
+				{ page: 'organize', icon: 'file-edit', label: '整理' },
+				{ page: 'learning', icon: 'graduation-cap', label: '学习' },
+				{ page: 'profile', icon: 'user', label: '我的' }
+			];
 
 		pages.forEach(({ page, icon, label }) => {
 			const navItem = navBar.createDiv({
@@ -1934,26 +1937,99 @@ export class CombineNotesView extends ItemView {
 		// 页面标题
 		const header = container.createDiv({ cls: 'page-header' });
 		header.createEl('h2', { text: '思序', cls: 'page-title' });
-		header.createEl('p', { text: '让思考更有序列', cls: 'page-subtitle' });
+			header.createEl('p', { text: '让思绪更有序列', cls: 'page-subtitle' });
 
-		// 数据看板
-		await this.renderDataDashboard(container);
+		// 继续学习（新增）
+		await this.renderContinueLearning(container);
+
+		// 最近活动预览和查看全部活动链接（移到继续学习下方）
+		await this.renderRecentActivitiesPreview(container);
 
 		// 快捷开始
 		this.renderQuickStart(container);
 
-		// 最近情况
-		await this.renderRecentSection(container);
+		// 你的快捷入口（原数据看板）
+		await this.renderQuickEntranceCards(container);
+	}
+
+	// =============== 导航辅助（KISS） ===============
+	private pushNavContext(): void {
+		this.navigationStack.push({ page: this.currentPage, learningState: this.learningState });
+	}
+
+	private goBackOr(fallback: () => void): void {
+		const prev = this.navigationStack.pop();
+		if (prev) {
+			this.currentPage = prev.page;
+			if (prev.page === 'learning' && prev.learningState) {
+				this.learningState = prev.learningState;
+			}
+			this.render();
+		} else {
+			fallback();
+		}
 	}
 
 	/**
-	 * 渲染数据看板
+	 * 渲染继续学习卡片
 	 */
-	private async renderDataDashboard(container: HTMLElement): Promise<void> {
-		const dashboard = container.createDiv({ cls: 'dashboard-section' });
-		dashboard.createEl('h3', { text: '数据看板', cls: 'section-title' });
+	private async renderContinueLearning(container: HTMLElement): Promise<void> {
+		try {
+			const section = container.createDiv({ cls: 'continue-learning-section' });
 
-		const grid = dashboard.createDiv({ cls: 'dashboard-grid' });
+			// 获取继续学习任务
+			const task = await this.getContinueLearningTasks();
+
+			if (!task) {
+				// 如果没有任务，不显示该区域
+				section.remove();
+				return;
+			}
+
+			// 创建绿色高亮卡片
+			const card = section.createDiv({ cls: 'continue-card' });
+			card.setAttribute('role', 'button');
+			card.setAttribute('tabindex', '0');
+
+			// 左侧勾选图标 - 使用简洁的自定义对勾
+			const icon = card.createDiv({ cls: 'continue-icon' });
+			icon.innerHTML = `
+				<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+					<polyline points="4 12 9 17 20 6"></polyline>
+				</svg>
+			`;
+
+			// 中间内容区
+			const content = card.createDiv({ cls: 'continue-content' });
+			content.createDiv({ cls: 'continue-title', text: task.title });
+			content.createDiv({ cls: 'continue-subtitle', text: task.subtitle });
+
+			// 右侧箭头图标
+			const arrow = card.createDiv({ cls: 'continue-arrow' });
+			setIcon(arrow, 'chevron-right');
+
+			// 点击事件
+			card.addEventListener('click', () => task.onClick());
+			card.addEventListener('keypress', (e: KeyboardEvent) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					task.onClick();
+				}
+			});
+
+		} catch (error) {
+			console.error('渲染继续学习卡片失败:', error);
+		}
+	}
+
+	/**
+	 * 渲染快捷入口卡片（原数据看板，增强为可点击）
+	 */
+	private async renderQuickEntranceCards(container: HTMLElement): Promise<void> {
+		const section = container.createDiv({ cls: 'quick-entrance-section' });
+		section.createEl('h3', { text: '你的快捷入口', cls: 'section-title' });
+
+		const grid = section.createDiv({ cls: 'quick-entrance-grid' });
 
 		if (!this.statisticsManager) return;
 
@@ -1964,59 +2040,133 @@ export class CombineNotesView extends ItemView {
 			this.getFlashcardStatistics()
 		]);
 
-		// 卡片1：已组合笔记数量
-		const card1 = grid.createDiv({ cls: 'dashboard-card' });
-		card1.createDiv({ cls: 'card-icon', text: '📝' });
-		card1.createDiv({ cls: 'card-value', text: combineCount.toString() });
-		card1.createDiv({ cls: 'card-label', text: '组合笔记' });
+		// 卡片配置（图标、数值、标签、引导文字、点击事件）
+			const cards = [
+				{
+					iconName: 'file-text',
+					value: quizStats.total,
+					label: 'Quiz试题',
+					action: '开始测验',
+					onClick: () => this.jumpToQuizList(),
+					iconColorClass: 'icon-blue'
+				},
+				{
+					iconName: 'layers',
+					value: flashcardStats.totalCards,
+					label: '闪卡练习',
+					action: '开始练习',
+					onClick: () => this.jumpToFlashcardList(),
+					iconColorClass: 'icon-purple'
+				},
+				{
+					iconName: 'check-circle',
+					value: quizStats.completed,
+					label: '已完成测验',
+					action: '查看结果',
+					onClick: () => this.jumpToCompletedQuizList(),
+					iconColorClass: 'icon-green'
+				},
+				{
+					iconName: 'book-open',
+					value: combineCount,
+					label: '组合笔记',
+					action: '查看笔记',
+					onClick: () => this.jumpToNotebookList(),
+					iconColorClass: 'icon-orange'
+				}
+			];
 
-		// 卡片2：Quiz总数
-		const card2 = grid.createDiv({ cls: 'dashboard-card' });
-		card2.createDiv({ cls: 'card-icon', text: '📋' });
-		card2.createDiv({ cls: 'card-value', text: quizStats.total.toString() });
-		card2.createDiv({ cls: 'card-label', text: 'Quiz试题' });
+		// 渲染每个卡片
+		cards.forEach(item => {
+			const card = grid.createDiv({ cls: 'entrance-card' });
+			card.setAttribute('role', 'button');
+			card.setAttribute('tabindex', '0');
+			card.setAttribute('aria-label', `${item.label}: ${item.value}，点击${item.action}`);
 
-		// 卡片3：已完成Quiz
-		const card3 = grid.createDiv({ cls: 'dashboard-card' });
-		card3.createDiv({ cls: 'card-icon', text: '✅' });
-		card3.createDiv({ cls: 'card-value', text: quizStats.completed.toString() });
-		card3.createDiv({ cls: 'card-label', text: '已完成测验' });
+			// 左侧扁平图标
+				const iconWrapper = card.createDiv({ cls: 'entrance-card-icon' });
+				if ((item as any).iconColorClass) {
+					iconWrapper.addClass((item as any).iconColorClass);
+				}
+				setIcon(iconWrapper, item.iconName);
 
-		// 卡片4：闪卡练习
-		const card4 = grid.createDiv({ cls: 'dashboard-card' });
-		card4.createDiv({ cls: 'card-icon', text: '📇' });
-		card4.createDiv({ cls: 'card-value', text: flashcardStats.totalCards.toString() });
-		card4.createDiv({ cls: 'card-label', text: '闪卡练习' });
+			// 右侧内容
+			const content = card.createDiv({ cls: 'entrance-card-content' });
+
+			// 数值
+			content.createDiv({ cls: 'entrance-card-value', text: item.value.toString() });
+
+			// 标签
+			content.createDiv({ cls: 'entrance-card-label', text: item.label });
+
+			// 蓝色引导文字
+			const actionText = content.createDiv({ cls: 'entrance-card-action' });
+			actionText.setText(item.action);
+
+			// 箭头
+			const arrow = actionText.createSpan({ cls: 'action-arrow' });
+			arrow.setText(' →');
+
+			// 点击事件
+			card.addEventListener('click', () => item.onClick());
+			card.addEventListener('keypress', (e: KeyboardEvent) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					item.onClick();
+				}
+			});
+		});
 	}
 
 	/**
-	 * 渲染快捷开始按钮
+	 * 渲染快捷开始按钮（新版：2个大卡片）
 	 */
 	private renderQuickStart(container: HTMLElement): void {
-		const section = container.createDiv({ cls: 'quick-start-section' });
+		const section = container.createDiv({ cls: 'quick-start-new' });
 		section.createEl('h3', { text: '快捷开始', cls: 'section-title' });
 
-		const grid = section.createDiv({ cls: 'quick-tiles-grid' });
+		const grid = section.createDiv({ cls: 'quick-start-grid-new' });
 
-		const tiles: Array<{ title: string; icon: string; color: string; onClick: () => void }> = [
-			{ title: '整理你的思绪', icon: 'layout', color: 'tile-blue', onClick: () => this.switchToPage('organize') },
-			{ title: '开始一次学习之旅', icon: 'graduation-cap', color: 'tile-green', onClick: () => this.switchToPage('learning') },
-			{ title: 'AI 整理笔记', icon: 'wand-2', color: 'tile-purple', onClick: () => this.showOrganizeCurrentNotePrompt() },
-			{ title: '学点什么', icon: 'book-open', color: 'tile-orange', onClick: () => this.openCreatePathModal() },
-			{ title: 'Flash Card', icon: 'layers', color: 'tile-teal', onClick: () => { this.switchToPage('learning'); this.learningState = 'flashcard-deck-list'; this.render(); } },
-			{ title: 'QUIZ 测验', icon: 'help-circle', color: 'tile-pink', onClick: () => { this.switchToPage('learning'); this.learningState = 'quiz-list'; this.render(); } }
+		const cards: Array<{ title: string; subtitle: string; icon: string; gradient: string; onClick: () => void }> = [
+			{
+				title: 'AI 整理笔记',
+				subtitle: '智能分析并开始',
+				icon: 'lightbulb',
+				gradient: 'linear-gradient(135deg, #4F7CE8 0%, #5B8DEF 100%)', // 深蓝色渐变
+				onClick: () => this.showOrganizeCurrentNotePrompt()
+			},
+			{
+				title: '学习新技能',
+				subtitle: '从空白页开始',
+				icon: 'book-open',
+				gradient: 'linear-gradient(135deg, #FF7844 0%, #FF8F5C 100%)', // 橙红色渐变
+				onClick: () => this.openCreatePathModal()
+			}
 		];
 
-		tiles.forEach(item => {
-			const tile = grid.createDiv({ cls: `quick-tile ${item.color}` });
-			tile.setAttr('role', 'button');
-			tile.setAttr('tabindex', '0');
-			tile.addEventListener('click', () => item.onClick());
-			tile.addEventListener('keypress', (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') item.onClick(); });
+		cards.forEach(item => {
+			const card = grid.createDiv({ cls: 'quick-start-card' });
+			card.style.background = item.gradient;
+			card.setAttribute('role', 'button');
+			card.setAttribute('tabindex', '0');
 
-			const iconEl = tile.createDiv({ cls: 'tile-icon' });
+			// 图标
+			const iconEl = card.createDiv({ cls: 'quick-start-icon' });
 			setIcon(iconEl, item.icon);
-			tile.createDiv({ cls: 'tile-label', text: item.title });
+
+			// 文本
+			const textEl = card.createDiv({ cls: 'quick-start-text' });
+			textEl.createDiv({ cls: 'quick-start-title', text: item.title });
+			textEl.createDiv({ cls: 'quick-start-subtitle', text: item.subtitle });
+
+			// 点击事件
+			card.addEventListener('click', () => item.onClick());
+			card.addEventListener('keypress', (e: KeyboardEvent) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					item.onClick();
+				}
+			});
 		});
 	}
 
@@ -3011,7 +3161,7 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染 Quiz Hub（选择“已有试题”或“创建新试题”）
 	 */
-	private renderQuizHubPage(container: HTMLElement): void {
+private renderQuizHubPage(container: HTMLElement): void {
 		const page = container.createDiv({ cls: 'quiz-hub-page' });
 
 		// 头部
@@ -3022,8 +3172,7 @@ export class CombineNotesView extends ItemView {
 		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
-			this.learningState = 'hub';
-			this.render();
+			this.goBackOr(() => { this.learningState = 'hub'; this.render(); });
 		});
 		titleRow.createEl('h2', { text: 'Quiz 学习', cls: 'page-title' });
 
@@ -3041,7 +3190,7 @@ export class CombineNotesView extends ItemView {
 		const right1 = tileExisting.createDiv({ cls: 'tile-graphic' });
 		const icon1 = right1.createDiv({ cls: 'tile-graphic-icon' });
 		setIcon(icon1, 'book-open');
-		tileExisting.addEventListener('click', () => { this.learningState = 'quiz-list'; this.render(); });
+		tileExisting.addEventListener('click', () => { this.pushNavContext(); this.learningState = 'quiz-list'; this.render(); });
 
 		// 创建新试题
 		const tileCreate = grid.createDiv({ cls: 'quiz-tile tile-orange' });
@@ -3167,7 +3316,7 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染Quiz列表页
 	 */
-	private async renderQuizListPage(container: HTMLElement): Promise<void> {
+private async renderQuizListPage(container: HTMLElement): Promise<void> {
 		const listPage = container.createDiv({ cls: 'quiz-list-page' });
 
 		// 页面头部
@@ -3178,9 +3327,7 @@ export class CombineNotesView extends ItemView {
 		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
-			this.learningState = 'quiz-hub';
-			this.exitQuizSelectionMode();
-			this.render();
+			this.goBackOr(() => { this.learningState = 'quiz-hub'; this.exitQuizSelectionMode(); this.render(); });
 		});
 		titleRow.createEl('h2', { text: '试题列表', cls: 'page-title' });
 		const manageBtn = titleRow.createEl('button', {
@@ -3500,15 +3647,14 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染“考试结果列表”页面（展示某套试题的历史成绩）
 	 */
-    private async renderQuizResultsListPage(container: HTMLElement): Promise<void> {
+private async renderQuizResultsListPage(container: HTMLElement): Promise<void> {
         // 头部（与列表同级，而非被列表包裹）
         const header = container.createDiv({ cls: 'learning-page-header results-header' });
 		const titleRow = header.createDiv({ cls: 'header-title-row' });
 		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
-			this.learningState = 'quiz-list';
-			this.render();
+			this.goBackOr(() => { this.learningState = 'quiz-list'; this.render(); });
 		});
 		titleRow.createEl('h2', { text: '考试结果', cls: 'page-title' });
 		header.createEl('p', { text: '查看历次考试结果', cls: 'page-subtitle' });
@@ -3636,7 +3782,7 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染闪卡列表页
 	 */
-	private async renderFlashcardDeckList(container: HTMLElement): Promise<void> {
+private async renderFlashcardDeckList(container: HTMLElement): Promise<void> {
 		container.empty();
 
 		// 添加返回按钮的头部
@@ -3647,8 +3793,7 @@ export class CombineNotesView extends ItemView {
 		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
-			this.learningState = 'hub';
-			this.render();
+			this.goBackOr(() => { this.learningState = 'hub'; this.render(); });
 		});
 		titleRow.createEl('h2', { text: '闪卡背诵', cls: 'page-title' });
 
@@ -4227,7 +4372,7 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 渲染闪卡学习页 - 新版3D卡片交互
 	 */
-	private renderFlashcardStudy(container: HTMLElement): void {
+private renderFlashcardStudy(container: HTMLElement): void {
 		container.empty();
 
 		if (!this.currentDeck || this.currentCards.length === 0) {
@@ -4245,8 +4390,7 @@ export class CombineNotesView extends ItemView {
 		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
-			this.learningState = 'flashcard-deck-list';
-			this.render();
+			this.goBackOr(() => { this.learningState = 'flashcard-deck-list'; this.render(); });
 		});
 		titleRow.createEl('h2', { text: this.currentDeck.name, cls: 'page-title' });
 
@@ -4865,6 +5009,276 @@ export class CombineNotesView extends ItemView {
 			console.error('获取闪卡统计失败:', error);
 			return { totalCards: 0, totalDecks: 0, masteredCards: 0 };
 		}
+	}
+
+	/**
+	 * 获取继续学习任务（未完成的学习内容）
+	 */
+	private async getContinueLearningTasks(): Promise<import('../types').ContinueLearningTask | null> {
+		try {
+			// 1. 检查未完成的Quiz测验
+			const incompleteQuiz = await this.getIncompleteQuiz();
+			if (incompleteQuiz) return incompleteQuiz;
+
+			// 2. 检查今日需要复习的闪卡
+			const dueFlashcards = await this.getDueFlashcards();
+			if (dueFlashcards) return dueFlashcards;
+
+			// 3. 检查进行中的学习路径
+			const inProgressPath = await this.getInProgressPath();
+			if (inProgressPath) return inProgressPath;
+
+			// 4. 获取最近访问的内容
+			const recentContent = await this.getRecentContent();
+			if (recentContent) return recentContent;
+
+			// 5. 如果没有任何内容，返回推荐
+			return this.getRecommendedContent();
+		} catch (error) {
+			console.error('获取继续学习任务失败:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * 获取未完成的Quiz测验
+	 */
+	private async getIncompleteQuiz(): Promise<import('../types').ContinueLearningTask | null> {
+		try {
+			const quizDir = this.plugin.settings.quizDir || 'quiz';
+			const files = this.app.vault.getFiles();
+			const quizFiles = files.filter(file =>
+				file.path.startsWith(quizDir + '/') &&
+				file.extension === 'md' &&
+				!file.basename.includes('结果')
+			);
+
+			if (quizFiles.length === 0) return null;
+
+			// 查找最近的Quiz文件
+			const sortedQuizFiles = quizFiles.sort((a, b) => b.stat.mtime - a.stat.mtime);
+			const latestQuiz = sortedQuizFiles[0];
+
+			// 检查是否有结果文件
+			const resultDir = this.plugin.settings.resultDir || 'quiz/results';
+			const resultFiles = files.filter(file =>
+				file.path.startsWith(resultDir + '/') &&
+				file.extension === 'md' &&
+				file.basename.includes(latestQuiz.basename)
+			);
+
+			// 如果最近的Quiz没有结果文件，说明未完成
+			if (resultFiles.length === 0) {
+				return {
+					type: 'quiz',
+					title: `继续：${latestQuiz.basename}`,
+					subtitle: '继续上次的测验',
+					onClick: () => {
+						this.switchToPage('learning');
+						this.learningState = 'quiz-list';
+						this.render();
+					}
+				};
+			}
+
+			return null;
+		} catch (error) {
+			console.error('获取未完成Quiz失败:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * 获取今日需要复习的闪卡
+	 */
+	private async getDueFlashcards(): Promise<import('../types').ContinueLearningTask | null> {
+		try {
+			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+			const decks = await storage.loadAllDecks();
+
+			let totalDueCards = 0;
+			let deckWithDue = null;
+
+			for (const deck of decks) {
+				// 从卡组的统计数据中获取需要学习的卡片数
+				const dueCount = (deck.stats.new || 0) + (deck.stats.learning || 0) + (deck.stats.review || 0);
+
+				if (dueCount > 0) {
+					totalDueCards += dueCount;
+					if (!deckWithDue) deckWithDue = deck;
+				}
+			}
+
+			if (totalDueCards > 0 && deckWithDue) {
+				return {
+					type: 'flashcard',
+					title: `复习 ${totalDueCards} 张闪卡`,
+					subtitle: `卡组：${deckWithDue.name}`,
+					onClick: () => {
+						this.switchToPage('learning');
+						this.learningState = 'flashcard-deck-list';
+						this.render();
+					}
+				};
+			}
+
+			return null;
+		} catch (error) {
+			console.error('获取到期闪卡失败:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * 获取进行中的学习路径
+	 */
+	private async getInProgressPath(): Promise<import('../types').ContinueLearningTask | null> {
+		try {
+			// 目前学习路径功能暂未完全实现，返回null
+			// TODO: 实现学习路径进度检测
+			return null;
+		} catch (error) {
+			console.error('获取学习路径失败:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * 获取最近访问的内容
+	 */
+	private async getRecentContent(): Promise<import('../types').ContinueLearningTask | null> {
+		try {
+			if (!this.statisticsManager) return null;
+
+			const activities = await this.statisticsManager.getRecentActivities(1);
+			if (activities.length === 0) return null;
+
+			const latestActivity = activities[0];
+			return {
+				type: 'recent',
+				title: `继续：${latestActivity.title}`,
+				subtitle: getActivityTypeLabel(latestActivity.type),
+				onClick: () => {
+					// 根据活动类型跳转到相应页面
+					if (latestActivity.type === 'quiz-generated' || latestActivity.type === 'quiz-completed') {
+						this.switchToPage('learning');
+						this.learningState = 'quiz-list';
+					} else if (latestActivity.type === 'flashcard-practiced') {
+						this.switchToPage('learning');
+						this.learningState = 'flashcard-deck-list';
+					} else {
+						this.switchToPage('organize');
+					}
+					this.render();
+				}
+			};
+		} catch (error) {
+			console.error('获取最近内容失败:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * 获取推荐内容（空状态）
+	 */
+	private getRecommendedContent(): import('../types').ContinueLearningTask {
+		// 智能推荐：根据用户使用频率推荐
+		return {
+			type: 'recent',
+			title: '开始新的学习之旅',
+			subtitle: '探索AI整理笔记或生成Quiz试题',
+			onClick: () => {
+				this.switchToPage('organize');
+				this.render();
+			}
+		};
+	}
+
+	// ==================== 快捷跳转工具方法 ====================
+
+	/**
+	 * 跳转到Quiz列表
+	 */
+private jumpToQuizList(): void {
+		this.pushNavContext();
+		this.switchToPage('learning');
+		this.learningState = 'quiz-list';
+		this.render();
+}
+
+	/**
+	 * 跳转到闪卡列表
+	 */
+private jumpToFlashcardList(): void {
+		this.pushNavContext();
+		this.switchToPage('learning');
+		this.learningState = 'flashcard-deck-list';
+		this.render();
+}
+
+	/**
+	 * 跳转到已完成Quiz列表
+	 */
+private jumpToCompletedQuizList(): void {
+		this.pushNavContext();
+		this.switchToPage('learning');
+		this.learningState = 'quiz-results-list';
+		this.render();
+}
+
+	/**
+	 * 跳转到组合笔记列表
+	 */
+private jumpToNotebookList(): void {
+		this.pushNavContext();
+		this.switchToPage('organize');
+		this.render();
+}
+
+	// ==================== 最近活动相关方法 ====================
+
+    /**
+     * 渲染最近活动预览（按设计稿：仅显示“查看全部活动”居中链接）
+     */
+    private async renderRecentActivitiesPreview(container: HTMLElement): Promise<void> {
+        if (!this.statisticsManager) return;
+
+        try {
+            const section = container.createDiv({ cls: 'recent-activities-preview' });
+
+            // 居中链接
+            const link = section.createEl('a', {
+                cls: 'view-all-link',
+                text: '查看全部活动'
+            });
+            // 通过样式让其居中显示
+            link.style.display = 'block';
+            link.style.textAlign = 'center';
+
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.showAllActivitiesModal();
+            });
+
+            // 仍然触发一次数据获取以保证与统计模块的潜在懒加载一致，但不渲染列表
+            void this.statisticsManager.getRecentActivities(1).catch(() => {});
+
+        } catch (error) {
+            console.error('渲染最近活动预览失败:', error);
+        }
+    }
+
+	/**
+	 * 显示全部活动模态框
+	 */
+	private showAllActivitiesModal(): void {
+		if (!this.statisticsManager) {
+			new Notice('统计管理器未初始化');
+			return;
+		}
+
+		const modal = new ActivityListModal(this.app, this.statisticsManager);
+		modal.open();
 	}
 
 	private renderProfilePage(container: HTMLElement): void {

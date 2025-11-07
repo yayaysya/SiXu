@@ -398,3 +398,18 @@ export interface QuizResult {
 	strongAreas: string[];
 	details: QuizQuestionResult[];
 }
+
+/**
+ * 继续学习任务类型
+ */
+export type ContinueLearningTaskType = 'quiz' | 'flashcard' | 'path' | 'recent';
+
+/**
+ * 继续学习任务
+ */
+export interface ContinueLearningTask {
+	type: ContinueLearningTaskType;
+	title: string;
+	subtitle: string;
+	onClick: () => void;
+}
