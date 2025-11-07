@@ -1354,9 +1354,11 @@ button.mod-cta:hover {
     background: var(--background-primary);
     border: 1px solid var(--background-modifier-border);
     border-radius: 12px;
-    padding: 20px;
-    min-width: 200px;
-    max-width: 300px;
+    padding: 16px;                 /* 略微减小内边距，降低视觉高度 */
+    min-width: 260px;
+    max-width: 420px;              /* 加宽一些，提升可读性 */
+    max-height: 60vh;              /* 控制高度，避免过高 */
+    overflow: auto;                /* 内容超出时滚动 */
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
@@ -3859,6 +3861,22 @@ button.mod-cta:hover {
 	border-color: var(--interactive-accent);
 }
 
+/* FilePickerModal（简化版）文件项：使用 file-list-item 类名的场景 */
+.file-list-container .file-list-item {
+    display: block;
+    padding: 8px 10px;
+    margin: 6px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background: var(--background-primary);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.file-list-container .file-list-item:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+}
+
 .file-item.disabled {
 	opacity: 0.5;
 	background-color: var(--background-modifier-hover);
@@ -6340,6 +6358,13 @@ button.mod-cta:hover {
 .quiz-generation-modal .quiz-source-block * { border-top: 0 !important; }
 .quiz-generation-modal .quiz-source-row { display: inline-flex; align-items: center; gap: 8px; }
 .quiz-generation-modal .quiz-source-hint { margin-top: 6px; color: var(--text-muted); flex-basis: 100%; }
+
+/* FilePicker 搜索行：输入与“最近”按钮留出间距 */
+.side-modal-card .quiz-source-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px; /* 输入与按钮的间距 */
+}
 .quiz-more-wrap { position: absolute; top: 8px; right: 8px; }
 .quiz-more-btn { width: 24px; height: 24px; padding: 0; border: none !important; background: transparent !important; box-shadow: none !important; color: #fff; display: inline-flex; align-items:center; justify-content:center; }
 .quiz-more-btn:hover { background: transparent !important; color: #fff; }

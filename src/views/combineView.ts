@@ -5375,12 +5375,21 @@ class FilePickerModal extends Modal {
     private selected: TFile | null = null;
     private listContainer!: HTMLElement;
     private searchInput!: HTMLInputElement;
+    private sortMode: 'modified' | 'created' = 'modified';
+    private sortMode: 'modified' | 'created' = 'modified';
+    private sortMode: 'modified' | 'created' = 'modified';
+    private sortMode: 'modified' | 'created' = 'modified';
+    private sortMode: 'modified' | 'created' = 'modified';
+    private sortMode: 'modified' | 'created' = 'modified';
+    private sortMode: 'modified' | 'created' = 'modified';
 
     constructor(app: App, files: TFile[], onChoose: (file: TFile | null) => void) {
         super(app);
         this.files = files;
         this.onChoose = onChoose;
     }
+
+    private sortMode: 'modified' | 'created' = 'modified';
 
     // === Flashcard: 菜单动作（Combine 视图专用） ===
     private async renameDeckInCombine(deck: FlashcardDeck, storage: FlashcardStorage) {
@@ -5562,8 +5571,15 @@ class FilePickerModal extends Modal {
 
         const searchWrap = contentEl.createDiv({ cls: 'setting-item' });
         searchWrap.createDiv({ text: '筛选', cls: 'setting-item-name' });
-        this.searchInput = searchWrap.createEl('input', { type: 'text', placeholder: '输入关键词过滤…' });
+        const row = searchWrap.createDiv({ cls: 'quiz-source-row' });
+        this.searchInput = row.createEl('input', { type: 'text', placeholder: '输入关键词过滤…' });
+        this.searchInput.style.minWidth = '220px';
         this.searchInput.addEventListener('input', () => this.renderList());
+        const recentBtn = row.createEl('button', { text: '最近' });
+        recentBtn.addEventListener('click', () => {
+            if (this.listContainer) this.listContainer.dataset.sortMode = 'created';
+            this.renderList();
+        });
 
         this.listContainer = contentEl.createDiv({ cls: 'file-list-container' });
         this.renderList();
@@ -5583,7 +5599,12 @@ class FilePickerModal extends Modal {
             return;
         }
 
-        filtered.sort((a, b) => b.stat.mtime - a.stat.mtime);
+        const mode = this.listContainer?.dataset?.sortMode || 'modified';
+        if (mode === 'created') {
+            filtered.sort((a, b) => b.stat.ctime - a.stat.ctime);
+        } else {
+            filtered.sort((a, b) => b.stat.mtime - a.stat.mtime);
+        }
         filtered.slice(0, 200).forEach(file => {
             const item = this.listContainer.createDiv({ cls: 'file-list-item' });
             item.createDiv({ cls: 'file-name', text: file.basename });
