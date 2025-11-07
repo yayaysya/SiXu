@@ -1,4 +1,4 @@
-import { App, Modal } from 'obsidian';
+import { App, Modal, setIcon } from 'obsidian';
 import { StatisticsManager } from '../utils/statistics';
 import { Activity, getActivityTypeLabel, getActivityTypeIcon } from '../types/activity';
 
@@ -124,38 +124,37 @@ export class ActivityListModal extends Modal {
 	/**
 	 * 渲染单个活动项
 	 */
-	private renderActivityItem(container: HTMLElement, activity: Activity): void {
-		const item = container.createDiv({ cls: 'activity-item' });
+    private renderActivityItem(container: HTMLElement, activity: Activity): void {
+        // 采用与 continue-learning-section 相同的结构与样式
+        const card = container.createDiv({ cls: 'continue-card activity-item' });
 
-		// 图标
-		const icon = item.createDiv({ cls: 'activity-icon' });
-		icon.setText(getActivityTypeIcon(activity.type));
+        // 左侧图标圆（与 continue 一致；内容使用活动类型的符号或图标）
+        const iconWrap = card.createDiv({ cls: 'continue-icon' });
+        // 如果后续引入类型到图标的映射，可用 setIcon(iconWrap, '...'); 这里先沿用字符符号
+        iconWrap.setText(getActivityTypeIcon(activity.type));
 
-		// 内容
-		const content = item.createDiv({ cls: 'activity-content' });
+        // 中间内容
+        const content = card.createDiv({ cls: 'continue-content' });
+        content.createDiv({ cls: 'continue-title', text: activity.title });
+        const subtitle = `${getActivityTypeLabel(activity.type)} · ${this.formatTime(activity.time)}`;
+        content.createDiv({ cls: 'continue-subtitle', text: subtitle });
 
-		const title = content.createDiv({ cls: 'activity-title' });
-		title.setText(activity.title);
+        // 右侧箭头
+        const arrow = card.createDiv({ cls: 'continue-arrow' });
+        setIcon(arrow, 'chevron-right');
 
-		const meta = content.createDiv({ cls: 'activity-meta' });
-		meta.setText(getActivityTypeLabel(activity.type));
-
-		// 时间
-		const time = item.createDiv({ cls: 'activity-time' });
-		time.setText(this.formatTime(activity.time));
-
-		// 如果有关联文件，添加点击事件
-		if (activity.fileLink) {
-			item.addClass('clickable');
-			item.addEventListener('click', async () => {
-				const file = this.app.vault.getAbstractFileByPath(activity.fileLink!);
-				if (file) {
-					await this.app.workspace.getLeaf().openFile(file as any);
-					this.close();
-				}
-			});
-		}
-	}
+        // 点击行为
+        if (activity.fileLink) {
+            card.addClass('clickable');
+            card.addEventListener('click', async () => {
+                const file = this.app.vault.getAbstractFileByPath(activity.fileLink!);
+                if (file) {
+                    await this.app.workspace.getLeaf().openFile(file as any);
+                    this.close();
+                }
+            });
+        }
+    }
 
 	/**
 	 * 格式化时间

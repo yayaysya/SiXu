@@ -2008,14 +2008,15 @@ export class CombineNotesView extends ItemView {
 			const arrow = card.createDiv({ cls: 'continue-arrow' });
 			setIcon(arrow, 'chevron-right');
 
-			// 点击事件
-			card.addEventListener('click', () => task.onClick());
-			card.addEventListener('keypress', (e: KeyboardEvent) => {
-				if (e.key === 'Enter' || e.key === ' ') {
-					e.preventDefault();
-					task.onClick();
-				}
-			});
+				// 点击事件（从首页进入：压栈，确保返回回到首页）
+				card.addEventListener('click', () => { this.pushNavContext(); task.onClick(); });
+				card.addEventListener('keypress', (e: KeyboardEvent) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						this.pushNavContext();
+						task.onClick();
+					}
+				});
 
 		} catch (error) {
 			console.error('渲染继续学习卡片失败:', error);
@@ -2048,7 +2049,8 @@ export class CombineNotesView extends ItemView {
 					label: 'Quiz试题',
 					action: '开始测验',
 					onClick: () => this.jumpToQuizList(),
-					iconColorClass: 'icon-blue'
+					iconColorClass: 'icon-blue',
+					cardClass: 'entrance-tint-blue'
 				},
 				{
 					iconName: 'layers',
@@ -2056,7 +2058,8 @@ export class CombineNotesView extends ItemView {
 					label: '闪卡练习',
 					action: '开始练习',
 					onClick: () => this.jumpToFlashcardList(),
-					iconColorClass: 'icon-purple'
+					iconColorClass: 'icon-purple',
+					cardClass: 'entrance-tint-purple'
 				},
 				{
 					iconName: 'check-circle',
@@ -2064,7 +2067,8 @@ export class CombineNotesView extends ItemView {
 					label: '已完成测验',
 					action: '查看结果',
 					onClick: () => this.jumpToCompletedQuizList(),
-					iconColorClass: 'icon-green'
+					iconColorClass: 'icon-green',
+					cardClass: 'entrance-tint-green'
 				},
 				{
 					iconName: 'book-open',
@@ -2072,13 +2076,15 @@ export class CombineNotesView extends ItemView {
 					label: '组合笔记',
 					action: '查看笔记',
 					onClick: () => this.jumpToNotebookList(),
-					iconColorClass: 'icon-orange'
+					iconColorClass: 'icon-orange',
+					cardClass: 'entrance-tint-orange'
 				}
 			];
 
 		// 渲染每个卡片
 		cards.forEach(item => {
-			const card = grid.createDiv({ cls: 'entrance-card' });
+				const card = grid.createDiv({ cls: 'entrance-card' });
+				if ((item as any).cardClass) card.addClass((item as any).cardClass);
 			card.setAttribute('role', 'button');
 			card.setAttribute('tabindex', '0');
 			card.setAttribute('aria-label', `${item.label}: ${item.value}，点击${item.action}`);

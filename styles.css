@@ -1442,9 +1442,10 @@ button.mod-cta:hover {
     align-items: center;
     padding: 12px;
     background: var(--background-secondary);
-    border-radius: 6px;
+    border-radius: 12px; /* 统一圆角 */
     border: 1px solid var(--background-modifier-border);
-    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04); /* 统一基础阴影 */
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .activity-item.clickable {
@@ -1453,7 +1454,9 @@ button.mod-cta:hover {
 
 .activity-item.clickable:hover {
     background: var(--background-modifier-hover);
-    transform: translateX(2px);
+    border-color: var(--interactive-accent);
+    transform: translateY(-1px); /* 统一上浮效果 */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .activity-icon {
@@ -6403,6 +6406,7 @@ button.mod-cta:hover {
     justify-content: center;
     margin-right: 16px;
     flex-shrink: 0;
+    color: #fff; /* 兼容字符图标为白色 */
 }
 
 .continue-icon svg {
@@ -6526,7 +6530,7 @@ button.mod-cta:hover {
 .entrance-card {
     background: #ffffff;
     border: 1px solid rgba(0, 0, 0, 0.06);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 16px;
     display: flex;
     align-items: flex-start;
@@ -6537,10 +6541,10 @@ button.mod-cta:hover {
 }
 
 .entrance-card:hover {
-    background: #fafafa;
+    background: #fafafa; /* 非tint卡片保持原逻辑 */
     border-color: var(--interactive-accent);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .entrance-card-icon {
@@ -6566,6 +6570,12 @@ button.mod-cta:hover {
 .entrance-card-icon.icon-green svg { stroke: #10B981; }
 .entrance-card-icon.icon-orange svg { stroke: #F97316; }
 
+/* 暗色主题下保持图标品牌色，不被通用 muted 规则覆盖 */
+.theme-dark .entrance-card-icon.icon-blue svg { stroke: #4F7CE8; }
+.theme-dark .entrance-card-icon.icon-purple svg { stroke: #8B5CF6; }
+.theme-dark .entrance-card-icon.icon-green svg { stroke: #10B981; }
+.theme-dark .entrance-card-icon.icon-orange svg { stroke: #F97316; }
+
 .entrance-card-content {
     flex: 1;
     display: flex;
@@ -6576,7 +6586,7 @@ button.mod-cta:hover {
 }
 
 .entrance-card-value {
-    font-size: 2em;
+    font-size: 2.1em;
     font-weight: 700;
     color: #000000;
     line-height: 1;
@@ -6584,7 +6594,7 @@ button.mod-cta:hover {
 }
 
 .entrance-card-label {
-    font-size: 0.9em;
+    font-size: 0.95em;
     font-weight: 400;
     color: #000000;
     margin-bottom: 6px;
@@ -6597,6 +6607,30 @@ button.mod-cta:hover {
     display: flex;
     align-items: center;
 }
+
+/* 主题色卡片（与截图风格一致的浅色背景） */
+.entrance-card.entrance-tint-blue { background: #EEF4FF; border-color: #D6E4FF; }
+.entrance-card.entrance-tint-purple { background: #F5EEFF; border-color: #E7D7FF; }
+.entrance-card.entrance-tint-green { background: #ECFDF5; border-color: #CFF7E8; }
+.entrance-card.entrance-tint-orange { background: #FFF5E9; border-color: #FFE0C2; }
+
+/* Tint 卡片 hover：背景加深，保持品牌色氛围 */
+.entrance-card.entrance-tint-blue:hover { background: #E0ECFF; border-color: #C6D8FF; }
+.entrance-card.entrance-tint-purple:hover { background: #EDE2FF; border-color: #DAC8FF; }
+.entrance-card.entrance-tint-green:hover { background: #DDF8EE; border-color: #BDEFD9; }
+.entrance-card.entrance-tint-orange:hover { background: #FFEAD6; border-color: #FFD8AD; }
+
+/* 暗色主题对应半透明色块 */
+.theme-dark .entrance-card.entrance-tint-blue { background: rgba(79, 124, 232, 0.12); border-color: rgba(79, 124, 232, 0.25); }
+.theme-dark .entrance-card.entrance-tint-purple { background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.25); }
+.theme-dark .entrance-card.entrance-tint-green { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.25); }
+.theme-dark .entrance-card.entrance-tint-orange { background: rgba(249, 115, 22, 0.12); border-color: rgba(249, 115, 22, 0.25); }
+
+/* Dark tint hover：稍加深透明度与边框强度，覆盖通用暗色hover */
+.theme-dark .entrance-card.entrance-tint-blue:hover { background: rgba(79, 124, 232, 0.18); border-color: rgba(79, 124, 232, 0.40); }
+.theme-dark .entrance-card.entrance-tint-purple:hover { background: rgba(139, 92, 246, 0.18); border-color: rgba(139, 92, 246, 0.40); }
+.theme-dark .entrance-card.entrance-tint-green:hover { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.40); }
+.theme-dark .entrance-card.entrance-tint-orange:hover { background: rgba(249, 115, 22, 0.18); border-color: rgba(249, 115, 22, 0.40); }
 
 .action-arrow {
     margin-left: 2px;
@@ -6660,9 +6694,10 @@ button.mod-cta:hover {
     align-items: center;
     padding: 12px;
     background: var(--background-secondary);
-    border-radius: 8px;
+    border-radius: 12px; /* 统一圆角 */
     border: 1px solid var(--background-modifier-border);
-    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04); /* 统一基础阴影 */
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .activity-preview-item.clickable {
@@ -6671,7 +6706,9 @@ button.mod-cta:hover {
 
 .activity-preview-item.clickable:hover {
     background: var(--background-modifier-hover);
-    transform: translateX(2px);
+    border-color: var(--interactive-accent);
+    transform: translateY(-1px); /* 统一上浮效果 */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .activity-preview-item .activity-icon {
@@ -6768,9 +6805,10 @@ button.mod-cta:hover {
     align-items: center;
     padding: 12px;
     background: var(--background-secondary);
-    border-radius: 8px;
+    border-radius: 12px; /* 统一圆角 */
     border: 1px solid var(--background-modifier-border);
-    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04); /* 统一基础阴影 */
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .activity-group .activity-item.clickable {
@@ -6779,7 +6817,9 @@ button.mod-cta:hover {
 
 .activity-group .activity-item.clickable:hover {
     background: var(--background-modifier-hover);
-    transform: translateX(2px);
+    border-color: var(--interactive-accent);
+    transform: translateY(-1px); /* 统一上浮效果 */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .error-state {
