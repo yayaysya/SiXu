@@ -80,7 +80,7 @@ export default class NotebookLLMPlugin extends Plugin {
 
 						menu.addItem((item) => {
 							item
-								.setTitle('AI 整理笔记')
+								.setTitle('AI 整理当前笔记')
 								.setIcon('sparkles')
 								.onClick(() => {
 									this.organizeNote(file);
@@ -103,6 +103,64 @@ export default class NotebookLLMPlugin extends Plugin {
 										} else {
 											new Notice('无法调用生成试题：视图未就绪');
 										}
+									}
+								});
+						});
+
+						// 生成闪卡组（右键）
+						menu.addItem((item) => {
+							item
+								.setTitle('生成 FLASHCARDS 闪卡')
+								.setIcon('wallet-cards')
+								.onClick(async () => {
+									try {
+										// 打开“创建卡组”对话框（预置来源为右键文件）
+										const { CreateDeckModal, ConfirmFlashcardsModal } = await import('./flashcard/FlashcardDeckView');
+										const { FlashcardGenerator } = await import('./flashcard/FlashcardGenerator');
+										const { FlashcardStorage } = await import('./flashcard/FlashcardStorage');
+
+                            new CreateDeckModal(this.app, this, async (deckName, sourceNote, cardCount) => {
+											const generator = new FlashcardGenerator(this.app, this);
+											const storage = new FlashcardStorage(this.app, this.settings.flashcard?.deckDir || 'flashcards');
+
+											// 状态栏任务
+											const taskId = `flashcard-gen-${Date.now()}`;
+											this.statusBarManager?.showTaskStatus(taskId, TaskStatus.GENERATING, 0, '闪卡生成中...');
+
+											try {
+												const { deck, cards } = await generator.generateFromNote(
+													{ deckName, sourceNote, count: cardCount },
+													(percent, status) => {
+														this.statusBarManager?.showTaskStatus(taskId, TaskStatus.GENERATING, percent, status || '闪卡生成中...');
+													}
+												);
+
+												// 打开确认对话框并保存
+												new ConfirmFlashcardsModal(
+													this.app,
+													cards,
+													async (confirmed) => {
+														if (confirmed.length > 0) {
+															deck.cardIds = confirmed.map(c => c.id);
+															deck.stats.total = confirmed.length;
+															deck.stats.new = confirmed.length;
+															await storage.saveDeck(deck, confirmed);
+															new Notice(`✅ 成功创建卡组，包含 ${confirmed.length} 张卡片`);
+														}
+														this.statusBarManager?.showTaskStatus(taskId, TaskStatus.COMPLETED, 100, '闪卡生成完成');
+														window.setTimeout(() => this.statusBarManager?.hideTask(taskId), 3000);
+													}
+												).open();
+
+											} catch (err:any) {
+												console.error('右键生成闪卡失败:', err);
+												this.statusBarManager?.showTaskStatus(`flashcard-gen-${Date.now()}`, TaskStatus.FAILED, 100, '闪卡生成失败');
+												window.setTimeout(() => this.statusBarManager?.hide(), 4000);
+											}
+                            }, file.path).open();
+
+									} catch (e) {
+										console.error(e);
 									}
 								});
 						});

@@ -447,10 +447,10 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 	/**
 	 * 显示创建卡组对话框
 	 */
-	private showCreateDeckModal(): void {
+	private showCreateDeckModal(defaultSourcePath?: string): void {
 		new CreateDeckModal(this.app, this.plugin, async (deckName, sourceNote, cardCount) => {
 			await this.createDeck(deckName, sourceNote, cardCount);
-		}).open();
+		}, defaultSourcePath).open();
 	}
 
 	/**
@@ -663,15 +663,18 @@ private renderCreateNewDeckCard(container: HTMLElement): void {
 class CreateDeckModal extends Modal {
     private onSubmit: (deckName: string, sourceNote: string, cardCount: number) => void;
     private plugin: NotebookLLMPlugin;
+    private defaultSourcePath?: string;
 
     constructor(
         app: App,
         plugin: NotebookLLMPlugin,
-        onSubmit: (deckName: string, sourceNote: string, cardCount: number) => void
+        onSubmit: (deckName: string, sourceNote: string, cardCount: number) => void,
+        defaultSourcePath?: string
     ) {
         super(app);
         this.plugin = plugin;
         this.onSubmit = onSubmit;
+        this.defaultSourcePath = defaultSourcePath;
     }
 
 	onOpen(): void {
@@ -694,21 +697,21 @@ class CreateDeckModal extends Modal {
 		let lastAutoName: string | null = null;
 		let nameManuallyEdited = false;
 
-		const simplifyDeckName = (raw: string): string => {
-			const base = (raw || '').toString();
-			let cleaned = base
-				.replace(/[\[\]{}（）()<>【】]/g, ' ') // 去掉括号符号
-				.replace(/[\t\r\n]+/g, ' ') // 换行制表
-				.replace(/[\|·•—–\-_/\\]+/g, ' ') // 分隔符归一
-				.replace(/\s+/g, ' ') // 空白压缩
-				.trim();
-			if (!cleaned) return '新建卡组';
-			const limit = 20; // 最长展示长度
-			if (cleaned.length > limit) {
-				cleaned = cleaned.slice(0, limit - 1) + '…';
-			}
-			return cleaned;
-		};
+            const simplifyDeckName = (raw: string): string => {
+                const base = (raw || '').toString();
+                let cleaned = base
+                    .replace(/[\[\]{}（）()<>【】]/g, ' ') // 去掉括号符号
+                    .replace(/[\t\r\n]+/g, ' ') // 换行制表
+                    .replace(/[\|·•—–\-_/\\]+/g, ' ') // 分隔符归一
+                    .replace(/\s+/g, ' ') // 空白压缩
+                    .trim();
+                if (!cleaned) return '新建卡组';
+                const limit = 32; // 最长保留末尾字符
+                if (cleaned.length > limit) {
+                    cleaned = '…' + cleaned.slice(-limit);
+                }
+                return cleaned;
+            };
 
 		// 监听名称输入，识别用户是否手动编辑
 		nameInput.addEventListener('input', () => {
@@ -725,19 +728,34 @@ class CreateDeckModal extends Modal {
 		});
 		noteInput.style.width = '100%';
 
-		let initialPath: string | null = null;
-		const currentFile = this.app.workspace.getActiveFile();
-		if (currentFile) {
-			noteInput.value = currentFile.path;
-			// 默认名称：基于当前笔记名的简化
-			lastAutoName = simplifyDeckName(currentFile.basename);
-			nameInput.value = lastAutoName; // 默认名称填入简化后的笔记名
-			initialPath = currentFile.path;
-		} else {
-			// 无当前笔记时提供通用默认名
-			lastAutoName = '新建卡组';
-			nameInput.value = lastAutoName;
-		}
+            let initialPath: string | null = null;
+            // 优先使用从右键菜单传入的默认路径
+            const defaultPath = this.defaultSourcePath;
+            if (defaultPath) {
+                noteInput.value = defaultPath;
+                const f = this.app.vault.getAbstractFileByPath(defaultPath);
+                if (f instanceof TFile) {
+                    lastAutoName = simplifyDeckName(f.basename);
+                    nameInput.value = lastAutoName;
+                } else {
+                    lastAutoName = '新建卡组';
+                    nameInput.value = lastAutoName;
+                }
+                initialPath = defaultPath;
+            } else {
+                const currentFile = this.app.workspace.getActiveFile();
+                if (currentFile) {
+                    noteInput.value = currentFile.path;
+                    // 默认名称：基于当前笔记名的简化
+                    lastAutoName = simplifyDeckName(currentFile.basename);
+                    nameInput.value = lastAutoName; // 默认名称填入简化后的笔记名
+                    initialPath = currentFile.path;
+                } else {
+                // 无当前笔记时提供通用默认名
+                lastAutoName = '新建卡组';
+                nameInput.value = lastAutoName;
+                }
+            }
 
 		const selectBtn = noteGroup.createEl('button', { text: '选择笔记' });
 		selectBtn.addEventListener('click', async () => {
@@ -831,11 +849,15 @@ class CreateDeckModal extends Modal {
 		const cancelBtn = buttonGroup.createEl('button', { text: '取消' });
 		cancelBtn.addEventListener('click', () => this.close());
 
-		const confirmBtn = buttonGroup.createEl('button', { text: '开始生成', cls: 'mod-cta' });
-		confirmBtn.addEventListener('click', () => {
-			const deckName = nameInput.value.trim();
-			const sourceNote = noteInput.value.trim();
-			const cardCount = parseInt(countInput.value);
+        const confirmBtn = buttonGroup.createEl('button', { text: '开始生成', cls: 'mod-cta' });
+        confirmBtn.addEventListener('click', () => {
+            let deckName = nameInput.value.trim();
+            // 若过长，保留末尾32个字符
+            if (deckName.length > 32) {
+                deckName = '…' + deckName.slice(-32);
+            }
+            const sourceNote = noteInput.value.trim();
+            const cardCount = parseInt(countInput.value);
 
 			if (!deckName) {
 				new Notice('请输入卡组名称');
