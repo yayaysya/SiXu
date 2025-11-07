@@ -6323,6 +6323,23 @@ button.mod-cta:hover {
 /* ===== 全局 Modal 间距微调 ===== */
 .modal-header { margin-bottom: 10px !important; }
 .modal-button-container { margin-top: 10px !important; }
+
+/* Quiz 生成弹窗：题源块合并显示 */
+.quiz-generation-modal .quiz-source-block {
+    border-top: none !important;
+    padding-top: 0;
+    display: flex;            /* 名称 + 选项 同行 */
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;          /* 允许下一行显示“已选择” */
+}
+.quiz-generation-modal .quiz-source-block .setting-item-name {
+    margin-bottom: 0;         /* 与选项同行 */
+    white-space: nowrap;
+}
+.quiz-generation-modal .quiz-source-block * { border-top: 0 !important; }
+.quiz-generation-modal .quiz-source-row { display: inline-flex; align-items: center; gap: 8px; }
+.quiz-generation-modal .quiz-source-hint { margin-top: 6px; color: var(--text-muted); flex-basis: 100%; }
 .quiz-more-wrap { position: absolute; top: 8px; right: 8px; }
 .quiz-more-btn { width: 24px; height: 24px; padding: 0; border: none !important; background: transparent !important; box-shadow: none !important; color: #fff; display: inline-flex; align-items:center; justify-content:center; }
 .quiz-more-btn:hover { background: transparent !important; color: #fff; }

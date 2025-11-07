@@ -66,29 +66,49 @@ export default class NotebookLLMPlugin extends Plugin {
 		});
 
 		// 添加右键菜单
-		this.registerEvent(
-			this.app.workspace.on('file-menu', (menu, file) => {
-				if (file instanceof TFile && file.extension === 'md') {
-					menu.addItem((item) => {
-						item
-							.setTitle('添加到待整理列表')
-							.setIcon('plus')
-							.onClick(() => {
-								this.addNoteToCombineList(file);
-							});
-					});
+			this.registerEvent(
+				this.app.workspace.on('file-menu', (menu, file) => {
+					if (file instanceof TFile && file.extension === 'md') {
+						menu.addItem((item) => {
+							item
+								.setTitle('添加到待整理列表')
+								.setIcon('plus')
+								.onClick(() => {
+									this.addNoteToCombineList(file);
+								});
+						});
 
-					menu.addItem((item) => {
-						item
-							.setTitle('AI 整理笔记')
-							.setIcon('sparkles')
-							.onClick(() => {
-								this.organizeNote(file);
-							});
-					});
-				}
-			})
-		);
+						menu.addItem((item) => {
+							item
+								.setTitle('AI 整理笔记')
+								.setIcon('sparkles')
+								.onClick(() => {
+									this.organizeNote(file);
+								});
+						});
+
+						// 生成 QUIZ 试题（右键）
+						menu.addItem((item) => {
+							item
+								.setTitle('生成 QUIZ 试题')
+								.setIcon('test-tube-diagonal')
+								.onClick(async () => {
+									// 打开组合视图并调用其生成方法
+									await this.activateCombineView();
+									const leaves = this.app.workspace.getLeavesOfType(COMBINE_VIEW_TYPE);
+									if (leaves.length > 0) {
+										const view: any = leaves[0].view;
+										if (view && typeof view.generateQuiz === 'function') {
+											view.generateQuiz(file);
+										} else {
+											new Notice('无法调用生成试题：视图未就绪');
+										}
+									}
+								});
+						});
+					}
+				})
+			);
 
 		// 添加编辑器右键菜单
 		this.registerEvent(

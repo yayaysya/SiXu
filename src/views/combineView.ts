@@ -987,13 +987,25 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 生成Quiz
 	 */
-	private async generateQuiz(sourceFile: TFile): Promise<void> {
-		try {
-			// 显示生成选项对话框
-			const options = await this.showQuizGenerationDialog();
-			if (!options) {
-				return; // 用户取消
-			}
+    private async generateQuiz(sourceFile: TFile): Promise<void> {
+        try {
+            // 显示生成选项对话框
+            const options = await this.showQuizGenerationDialog(sourceFile);
+            if (!options) {
+                return; // 用户取消
+            }
+
+            // 决定题源
+            let finalSource: TFile | null = null;
+            if (options.sourceMode === 'pick' && options.selectedFile) {
+                finalSource = options.selectedFile;
+            } else if (sourceFile) {
+                finalSource = sourceFile;
+            } else {
+                const activeFile = this.app.workspace.getActiveFile();
+                finalSource = activeFile instanceof TFile ? activeFile : null;
+            }
+            if (!finalSource) { new Notice('请选择一个题源文件'); return; }
 
 			// 重置取消标志
 			this.isCancelled = false;
@@ -1027,9 +1039,9 @@ export class CombineNotesView extends ItemView {
 			const { QuizGenerator } = await import('../processors/quizGenerator');
 			const generator = new QuizGenerator(this.plugin.app, this.plugin);
 
-			const quizFile = await generator.generateQuizFromFile(
-				sourceFile,
-				options,
+            const quizFile = await generator.generateQuizFromFile(
+                finalSource,
+                options,
 				(percent, status) => {
 					if (this.isCancelled) {
 						throw new Error('User cancelled');
@@ -1070,18 +1082,20 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 显示Quiz生成选项对话框
 	 */
-	private showQuizGenerationDialog(): Promise<{
-		difficulty: '简单' | '中等' | '困难';
-		totalQuestions: number;
-		questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
-	} | null> {
-		return new Promise((resolve) => {
-			const modal = new QuizGenerationModal(this.plugin.app, (result) => {
-				resolve(result);
-			});
-			modal.open();
-		});
-	}
+    private showQuizGenerationDialog(defaultFile: TFile | null): Promise<{
+        difficulty: '简单' | '中等' | '困难';
+        totalQuestions: number;
+        questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
+        sourceMode: 'current' | 'pick';
+        selectedFile: TFile | null;
+    } | null> {
+        return new Promise((resolve) => {
+            const modal = new QuizGenerationModal(this.plugin.app, defaultFile, () => this.showFilePickerModal(), (result) => {
+                resolve(result);
+            });
+            modal.open();
+        });
+    }
 
 	/**
 	 * 开始考试
@@ -3032,18 +3046,27 @@ export class CombineNotesView extends ItemView {
 	/**
 	 * 选择一个 Markdown 文件作为 Quiz 源
 	 */
-	private showFilePickerModal(): Promise<TFile | null> {
-		return new Promise((resolve) => {
-			const allFiles = this.app.vault.getFiles().filter(f => {
-				if (f.extension !== 'md') return false;
-				const p = f.path.toLowerCase();
-				if (p.endsWith('.excalidraw.md')) return false; // 排除 Excalidraw 文件
-				return true;
-			});
-			const modal = new FilePickerModal(this.app, allFiles, (file) => resolve(file));
-			modal.open();
-		});
-	}
+    private showFilePickerModal(): Promise<TFile | null> {
+        return new Promise((resolve) => {
+            const s = this.plugin.settings;
+            const norm = (p: string | undefined) => (p || '').replace(/\\/g,'/').toLowerCase().replace(/^\//,'');
+            const quizDir = norm(s.quizDir);
+            const resultDir = norm(s.resultDir);
+            const deckDir = norm(s.flashcard?.deckDir || 'flashcards');
+            const allowed = this.app.vault.getFiles().filter(f => {
+                const p = f.path.replace(/\\/g,'/').toLowerCase();
+                if (!p.endsWith('.md')) return false;
+                if (p.endsWith('.excalidraw.md')) return false;
+                if (p.includes('sixu_debugger')) return false;
+                if (quizDir && p.startsWith(quizDir + '/')) return false;
+                if (resultDir && p.startsWith(resultDir + '/')) return false;
+                if (deckDir && p.startsWith(deckDir + '/')) return false;
+                return true;
+            });
+            const modal = new FilePickerModal(this.app, allowed, (file) => resolve(file));
+            modal.open();
+        });
+    }
 
 	private resetQuizSelection(): void {
 		this.selectedQuizPaths.clear();
@@ -3770,8 +3793,12 @@ export class CombineNotesView extends ItemView {
         } else {
             this.renderDeckCardCore(container, deck, storage);
         }
+
+        // 实际渲染卡组卡片内容（含右上角三点菜单）
+        
     }
 
+    // 实际渲染卡组卡片内容（含右上角三点菜单）
     private renderDeckCardCore(container: HTMLElement, deck: FlashcardDeck, storage: FlashcardStorage): void {
         const isSelected = this.selectedDeckIds.has(deck.id);
         const card = container.createDiv({ cls: (isSelected ? 'deck-card selected ' : 'deck-card ') + 'folder-card' });
@@ -3801,7 +3828,6 @@ export class CombineNotesView extends ItemView {
             await this.startStudying(deck.id);
         });
 
-        // 右上角更多菜单（与 FlashcardDeckView 保持一致）
         const moreWrap = overlay.createDiv({ cls: 'deck-more-wrap' });
         const moreBtn = moreWrap.createEl('button', { cls: 'deck-more-btn clickable-icon', attr: { 'aria-label': '更多操作' } });
         setIcon(moreBtn, 'ellipsis-vertical');
@@ -3830,9 +3856,9 @@ export class CombineNotesView extends ItemView {
         moreBtn.addEventListener('click', (e) => { e.stopPropagation(); showMenu(); });
     }
 
-	/**
-	 * 开始学习卡组
-	 */
+    /**
+     * 开始学习卡组
+     */
 	private async startStudying(deckId: string): Promise<void> {
 		try {
 			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
@@ -5162,32 +5188,46 @@ private openPathPreviewModal(outline: LearningPathOutline, config: LearningPathC
  * Quiz生成选项对话框
  */
 class QuizGenerationModal extends Modal {
-	private result: {
-		difficulty: '简单' | '中等' | '困难';
-		totalQuestions: number;
-		questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
-	} | null = null;
-	private onSubmit: (result: {
-		difficulty: '简单' | '中等' | '困难';
-		totalQuestions: number;
-		questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
-	} | null) => void;
+    private result: {
+        difficulty: '简单' | '中等' | '困难';
+        totalQuestions: number;
+        questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
+        sourceMode: 'current' | 'pick';
+        selectedFile: TFile | null;
+    } | null = null;
+    private onSubmit: (result: {
+        difficulty: '简单' | '中等' | '困难';
+        totalQuestions: number;
+        questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
+        sourceMode: 'current' | 'pick';
+        selectedFile: TFile | null;
+    } | null) => void;
 
-	private difficultySelect: HTMLSelectElement;
-	private countInput: HTMLInputElement;
-	private typeCheckboxes: { value: string; checkbox: HTMLInputElement }[] = [];
+    private difficultySelect: HTMLSelectElement;
+    private countInput: HTMLInputElement;
+    private typeCheckboxes: { value: string; checkbox: HTMLInputElement }[] = [];
+    private sourceMode: 'current' | 'pick' = 'current';
+    private selectedFile: TFile | null = null;
+    private readonly defaultFile: TFile | null;
+    private readonly openPicker: () => Promise<TFile | null>;
 
-	constructor(
-		app: App,
-		onSubmit: (result: {
-			difficulty: '简单' | '中等' | '困难';
-			totalQuestions: number;
-			questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
-		} | null) => void
-	) {
-		super(app);
-		this.onSubmit = onSubmit;
-	}
+    constructor(
+        app: App,
+        defaultFile: TFile | null,
+        openPicker: () => Promise<TFile | null>,
+        onSubmit: (result: {
+            difficulty: '简单' | '中等' | '困难';
+            totalQuestions: number;
+            questionTypes: ('single-choice' | 'multiple-choice' | 'fill-blank' | 'short-answer')[];
+            sourceMode: 'current' | 'pick';
+            selectedFile: TFile | null;
+        } | null) => void
+    ) {
+        super(app);
+        this.onSubmit = onSubmit;
+        this.defaultFile = defaultFile;
+        this.openPicker = openPicker;
+    }
 
 	onOpen(): void {
 		const { contentEl } = this;
@@ -5196,8 +5236,30 @@ class QuizGenerationModal extends Modal {
 		// 添加自定义类名，避免样式污染其他模态框
 		this.modalEl.addClass('quiz-generation-modal');
 
-		// 标题
-		contentEl.createEl('h3', { text: '生成Quiz设置' });
+        // 标题
+        contentEl.createEl('h3', { text: '生成Quiz设置' });
+
+        // 题源选择（放在最上，便于先选文件再设定参数）
+        const sourceGroup = contentEl.createDiv({ cls: 'setting-item quiz-source-block' });
+        sourceGroup.createDiv({ text: '题源', cls: 'setting-item-name' });
+        const sourceLine = sourceGroup.createDiv({ cls: 'quiz-source-row' });
+        const radioCurrent = sourceLine.createEl('input', { type: 'radio' }) as HTMLInputElement;
+        radioCurrent.name = 'quiz-source-mode'; radioCurrent.checked = true;
+        sourceLine.appendText(' 当前文档  ');
+        const radioPick = sourceLine.createEl('input', { type: 'radio' }) as HTMLInputElement;
+        radioPick.name = 'quiz-source-mode';
+        sourceLine.appendText(' 选择文件  ');
+        const pickBtn = sourceLine.createEl('button', { text: '选择文件…' });
+        pickBtn.addEventListener('click', async () => {
+            const picked = await this.openPicker();
+            if (picked) { this.selectedFile = picked; this.sourceMode = 'pick'; radioPick.checked = true; radioCurrent.checked = false; this.renderSourceHint(hintEl); }
+        });
+
+        const hintEl = sourceGroup.createDiv({ cls: 'quiz-source-hint' });
+        this.renderSourceHint(hintEl);
+
+        radioCurrent.addEventListener('change', () => { if (radioCurrent.checked) { this.sourceMode = 'current'; this.renderSourceHint(hintEl); } });
+        radioPick.addEventListener('change', () => { if (radioPick.checked) { this.sourceMode = 'pick'; this.renderSourceHint(hintEl); } });
 
 		// 难度选择
 		const difficultyGroup = contentEl.createDiv({ cls: 'setting-item' });
@@ -5238,9 +5300,9 @@ class QuizGenerationModal extends Modal {
 			this.typeCheckboxes.push({ value: type.value, checkbox });
 		});
 
-		// 按钮
-		const buttonGroup = contentEl.createDiv({ cls: 'modal-button-container' });
-		buttonGroup.style.cssText = 'display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;';
+        // 按钮
+        const buttonGroup = contentEl.createDiv({ cls: 'modal-button-container' });
+        buttonGroup.style.cssText = 'display: flex; gap: 10px; justify-content: flex-end;';
 
 		const cancelBtn = buttonGroup.createEl('button', { text: '取消' });
 		cancelBtn.addEventListener('click', () => {
@@ -5278,13 +5340,29 @@ class QuizGenerationModal extends Modal {
 			return;
 		}
 
-		this.result = {
-			difficulty,
-			totalQuestions,
-			questionTypes: selectedTypes
-		};
-		this.close();
-	}
+            this.result = {
+                difficulty,
+                totalQuestions,
+                questionTypes: selectedTypes,
+                sourceMode: this.sourceMode,
+                selectedFile: this.selectedFile
+            };
+            this.close();
+        }
+
+    private renderSourceHint(hintEl: HTMLElement): void {
+        hintEl.empty();
+        const shortName = (file: TFile | null) => {
+            if (!file) return '未选择';
+            const name = file.basename; // no extension
+            return name.length > 32 ? '…' + name.slice(-32) : name;
+        };
+        const text = this.sourceMode === 'current'
+            ? `已选择：${shortName(this.defaultFile)}`
+            : `已选择：${shortName(this.selectedFile)}`;
+        hintEl.createDiv({ text });
+    }
+
 }
 
 /**
