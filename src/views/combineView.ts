@@ -3062,6 +3062,57 @@ export class CombineNotesView extends ItemView {
 		this.render();
 	}
 
+	// === Quiz 卡片：更多菜单动作 ===
+	private async renameQuizFile(file: TFile): Promise<void> {
+		const modal = new (class extends Modal {
+			private initTitle: string; private onOk: (t: string)=>void;
+			constructor(app: App, current: string, onOk: (t: string)=>void){ super(app); this.initTitle=current; this.onOk=onOk; }
+			onOpen(){ const el=this.contentEl; el.empty(); this.modalEl.addClass('rename-deck-modal'); el.createEl('h3',{text:'重命名试题集'});
+				const input=el.createEl('input',{type:'text'}) as HTMLInputElement; input.style.width='100%'; input.value=this.initTitle; setTimeout(()=>input.focus(),50);
+				const btns=el.createDiv({cls:'modal-button-container'}); const cancel=btns.createEl('button',{text:'取消'}); const ok=btns.createEl('button',{text:'确认',cls:'mod-cta'});
+				cancel.addEventListener('click',()=>this.close()); ok.addEventListener('click',()=>{ const v=input.value.trim(); if(v){ this.onOk(v); this.close(); }});
+				input.addEventListener('keypress',(e)=>{ if(e.key==='Enter') ok.click(); }); }
+		})(this.app, file.basename, async (newTitle) => {
+			const content = await this.app.vault.read(file);
+			const updated = CombineNotesView.updateFrontmatterTitle(content, newTitle);
+			await this.app.vault.modify(file, updated);
+			new Notice('已更新试题标题');
+			this.render();
+		});
+		modal.open();
+	}
+
+	private async deleteQuizFile(file: TFile): Promise<void> {
+		const ok = await this.showConfirmDialog(`确定删除试题“${file.basename}”吗？此操作不可恢复。`, '删除试题', '删除', '取消');
+		if (!ok) return;
+		await this.app.vault.delete(file);
+		new Notice('已删除试题');
+		this.render();
+	}
+
+	// 简单 frontmatter title 更新（KISS）
+	private static updateFrontmatterTitle(content: string, newTitle: string): string {
+		const fmStart = content.indexOf('---');
+		if (fmStart === 0) {
+			const fmEnd = content.indexOf('\n---', 3);
+			if (fmEnd > 0) {
+				const head = content.slice(0, fmEnd + 4);
+				const body = content.slice(fmEnd + 4);
+				const lines = head.split(/\r?\n/);
+				let found = false;
+				const newLines = lines.map((ln, idx)=>{
+					if (idx===0 || idx===lines.length-1) return ln; // keep '---'
+					if (/^title\s*:/i.test(ln.trim())) { found=true; return `title: "${newTitle}"`; }
+					return ln;
+				});
+				if (!found) newLines.splice(1,0,`title: "${newTitle}"`);
+				return newLines.join('\n') + body;
+			}
+		}
+		// 无 frontmatter，创建
+		return `---\ntitle: "${newTitle}"\n---\n\n` + content;
+	}
+
 	private setQuizSelected(path: string, selected: boolean): void {
 		if (selected) {
 			this.selectedQuizPaths.add(path);
@@ -3183,7 +3234,7 @@ export class CombineNotesView extends ItemView {
 
 		const card = row.createDiv({ cls: 'quiz-card' });
 
-		const header = card.createDiv({ cls: 'quiz-card-header' });
+        const header = card.createDiv({ cls: 'quiz-card-header' });
 
 		// 获取元数据
 		const metadata = this.app.metadataCache.getFileCache(file);
@@ -3207,7 +3258,26 @@ export class CombineNotesView extends ItemView {
 		const title = header.createEl('h3', { cls: 'quiz-card-title' });
 		title.setText(frontmatter?.title || file.basename);
 
-		// 元信息
+        // 右上角更多菜单（三点）
+        const qMoreWrap = header.createDiv({ cls: 'quiz-more-wrap' });
+        const qMoreBtn = qMoreWrap.createEl('button', { cls: 'quiz-more-btn clickable-icon', attr: { 'aria-label': '更多操作' } });
+        setIcon(qMoreBtn, 'ellipsis-vertical');
+        let qMenuEl: HTMLElement | null = null;
+        const qHide = () => { qMenuEl?.remove(); qMenuEl = null; window.removeEventListener('click', qOutside, true); };
+        const qOutside = (ev: MouseEvent) => { if (!qMenuEl) return; const t = ev.target as Node; if (!qMenuEl.contains(t) && !qMoreBtn.contains(t)) qHide(); };
+        const qShow = () => {
+            if (qMenuEl) { qHide(); return; }
+            qMenuEl = document.createElement('div');
+            qMenuEl.className = 'deck-card-menu';
+            const mk = (text: string, act: () => void) => { const it = document.createElement('div'); it.className='deck-card-menu-item'; it.textContent=text; it.addEventListener('click',(e)=>{ e.stopPropagation(); qHide(); act();}); qMenuEl!.appendChild(it); };
+            mk('重命名', () => this.renameQuizFile(file));
+            mk('编辑', () => this.openFile(file.path));
+            mk('删除', () => this.deleteQuizFile(file));
+            qMoreWrap.appendChild(qMenuEl); window.addEventListener('click', qOutside, true);
+        };
+        qMoreBtn.addEventListener('click', (e) => { e.stopPropagation(); qShow(); });
+
+        // 元信息
         const meta = card.createDiv({ cls: 'quiz-card-meta' });
 
         const difficulty = frontmatter?.difficulty || '未知';
@@ -3233,7 +3303,7 @@ export class CombineNotesView extends ItemView {
                 console.warn('获取最近成绩失败', e);
             }
         }
-
+        
         // 已完成状态：不再显示旧的“已完成”角标，展示两个操作按钮
 
 		// 按钮

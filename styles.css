@@ -6323,3 +6323,7 @@ button.mod-cta:hover {
 /* ===== 全局 Modal 间距微调 ===== */
 .modal-header { margin-bottom: 10px !important; }
 .modal-button-container { margin-top: 10px !important; }
+.quiz-more-wrap { position: absolute; top: 8px; right: 8px; }
+.quiz-more-btn { width: 24px; height: 24px; padding: 0; border: none !important; background: transparent !important; box-shadow: none !important; color: #fff; display: inline-flex; align-items:center; justify-content:center; }
+.quiz-more-btn:hover { background: transparent !important; color: #fff; }
+.quiz-more-btn .svg-icon, .quiz-more-btn .svg-icon * { stroke: #fff !important; fill: #fff !important; }
