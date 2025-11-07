@@ -914,13 +914,18 @@ class FilePickerModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		this.modalEl.addClass('file-picker-modal');
+		this.modalEl.addClass('side-modal-card');
 
 		contentEl.createEl('h3', { text: '选择笔记生成闪卡' });
 
-		// 搜索框
+		// 搜索框 + 最近按钮
 		const searchWrap = contentEl.createDiv({ cls: 'setting-item' });
-		this.searchInput = searchWrap.createEl('input', { type: 'text', placeholder: '输入关键词过滤…' });
+		const row = searchWrap.createDiv({ cls: 'quiz-source-row' });
+		this.searchInput = row.createEl('input', { type: 'text', placeholder: '输入关键词过滤…' });
+		this.searchInput.style.minWidth = '220px';
 		this.searchInput.addEventListener('input', () => this.renderList());
+		const recentBtn = row.createEl('button', { text: '最近' });
+		recentBtn.addEventListener('click', () => { (this.listContainer as any).dataset.sortMode = 'created'; this.renderList(); });
 
 		// 列表
 		this.listContainer = contentEl.createDiv({ cls: 'file-list-container' });
@@ -944,8 +949,13 @@ class FilePickerModal extends Modal {
 			return;
 		}
 
-		// 按最近修改时间倒序
-		filtered.sort((a, b) => b.stat.mtime - a.stat.mtime);
+		// 排序：默认按修改时间，点击“最近”后按创建时间
+		const mode = (this.listContainer as any)?.dataset?.sortMode || 'modified';
+		if (mode === 'created') {
+			filtered.sort((a, b) => b.stat.ctime - a.stat.ctime);
+		} else {
+			filtered.sort((a, b) => b.stat.mtime - a.stat.mtime);
+		}
 
 			filtered.slice(0, 200).forEach(file => {
 				const item = this.listContainer.createDiv({ cls: 'file-list-item' });

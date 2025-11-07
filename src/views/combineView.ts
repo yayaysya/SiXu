@@ -988,6 +988,7 @@ export class CombineNotesView extends ItemView {
 	 * 生成Quiz
 	 */
     private async generateQuiz(sourceFile: TFile): Promise<void> {
+        let quizTaskId: string | undefined;
         try {
             // 显示生成选项对话框
             const options = await this.showQuizGenerationDialog(sourceFile);
@@ -1006,6 +1007,10 @@ export class CombineNotesView extends ItemView {
                 finalSource = activeFile instanceof TFile ? activeFile : null;
             }
             if (!finalSource) { new Notice('请选择一个题源文件'); return; }
+
+            // 状态栏进行中任务
+            quizTaskId = `quiz-gen-${Date.now()}`;
+            this.plugin.statusBarManager?.showTaskStatus(quizTaskId, TaskStatus.GENERATING, 0, '试题生成中...');
 
 			// 重置取消标志
 			this.isCancelled = false;
@@ -1042,13 +1047,16 @@ export class CombineNotesView extends ItemView {
             const quizFile = await generator.generateQuizFromFile(
                 finalSource,
                 options,
-				(percent, status) => {
-					if (this.isCancelled) {
-						throw new Error('User cancelled');
-					}
-					this.progressCard?.updateProgress(percent, status);
-				}
-			);
+                (percent, status) => {
+                    if (this.isCancelled) {
+                        throw new Error('User cancelled');
+                    }
+                    this.progressCard?.updateProgress(percent, status);
+                    if (quizTaskId) {
+                        this.plugin.statusBarManager?.showTaskStatus(quizTaskId, TaskStatus.GENERATING, percent, status || '试题生成中...');
+                    }
+                }
+            );
 
 			// 完成：记录是否为前台等待（未选择“后台运行”）
 			const wasForeground = this.progressCard?.isShown?.() === true;
@@ -1056,7 +1064,13 @@ export class CombineNotesView extends ItemView {
 			this.progressCard?.destroy();
 			this.progressCard = null;
 
-			new Notice(`Quiz生成成功：${quizFile.basename}`);
+            new Notice(`Quiz生成成功：${quizFile.basename}`);
+
+            // 状态栏完成与隐藏
+            if (quizTaskId) {
+                this.plugin.statusBarManager?.showTaskStatus(quizTaskId, TaskStatus.COMPLETED, 100, '试题生成完成');
+                window.setTimeout(() => this.plugin.statusBarManager?.hideTask(quizTaskId!), 3000);
+            }
 
 			// 生成完成后：若用户在前台等待，则自动跳转到“学习 → 试题列表”
 			if (wasForeground) {
@@ -1067,17 +1081,23 @@ export class CombineNotesView extends ItemView {
 
 			// 刷新视图（确保列表立即显示新试题）
 			this.render();
-		} catch (error) {
-			// 清理进度卡片
-			this.progressCard?.destroy();
-			this.progressCard = null;
+        } catch (error) {
+            // 清理进度卡片
+            this.progressCard?.destroy();
+            this.progressCard = null;
 
-			if (error.message !== 'User cancelled') {
-				console.error('生成Quiz失败:', error);
-				new Notice(`生成Quiz失败: ${error.message}`);
-			}
-		}
-	}
+            if (error.message !== 'User cancelled') {
+                console.error('生成Quiz失败:', error);
+                new Notice(`生成Quiz失败: ${error.message}`);
+            }
+            // 状态栏失败提示
+            try {
+                const failId = quizTaskId ?? `quiz-gen-${Date.now()}`;
+                this.plugin.statusBarManager?.showTaskStatus(failId, TaskStatus.FAILED, 100, '试题生成失败');
+                window.setTimeout(() => this.plugin.statusBarManager?.hideTask(failId), 4000);
+            } catch {}
+        }
+    }
 
 	/**
 	 * 显示Quiz生成选项对话框
