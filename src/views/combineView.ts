@@ -26,7 +26,7 @@ type ViewPage = 'home' | 'organize' | 'learning' | 'profile';
 /**
  * 学习中心子页面状态
  */
-type LearningViewState = 'hub' | 'quiz-hub' | 'quiz-list' | 'quiz-exam' | 'quiz-result' | 'quiz-results-list' | 'flashcard-deck-list' | 'flashcard-study' | 'flashcard-create';
+type LearningViewState = 'hub' | 'quiz-hub' | 'quiz-list' | 'quiz-exam' | 'quiz-result' | 'quiz-results-list' | 'flashcard-daily-hub' | 'flashcard-deck-list' | 'flashcard-study' | 'flashcard-study-summary' | 'flashcard-create';
 
 /**
  * @deprecated 旧的Tab类型，保留用于兼容
@@ -113,6 +113,9 @@ export class CombineNotesView extends ItemView {
 	private deckSortMode: 'time' | 'name' | 'cards' = 'time';
 	private deckBackgroundTaskId: string | null = null;
 	private deckBackgroundActive: boolean = false;
+	// 混合学习相关状态
+	private isMixedStudy: boolean = false;  // 标记当前是否为混合学习
+	private studyResults: Array<{ cardId: string; rating: number; timeTaken: number; deckId: string }> = [];  // 学习结果记录
 
 	// 个人资料视图
 	private userProfileView: UserProfileView | null = null;
@@ -2143,7 +2146,7 @@ export class CombineNotesView extends ItemView {
 			},
 			{
 				title: '学习新技能',
-				subtitle: '从空白页开始',
+				subtitle: '生成一整套的学习教程',
 				icon: 'book-open',
 				gradient: 'linear-gradient(135deg, #FF7844 0%, #FF8F5C 100%)', // 橙红色渐变
 				onClick: () => this.openCreatePathModal()
@@ -3116,11 +3119,17 @@ export class CombineNotesView extends ItemView {
 			case 'quiz-results-list':
 				this.renderQuizResultsListPage(container);
 				break;
+			case 'flashcard-daily-hub':
+				this.renderFlashcardDailyHub(container);
+				break;
 			case 'flashcard-deck-list':
 				this.renderFlashcardDeckList(container);
 				break;
 			case 'flashcard-study':
 				this.renderFlashcardStudy(container);
+				break;
+			case 'flashcard-study-summary':
+				this.renderFlashcardStudySummary(container);
 				break;
 			case 'flashcard-create':
 				this.renderFlashcardCreate(container);
@@ -3143,7 +3152,7 @@ export class CombineNotesView extends ItemView {
 
 		const entries: Array<{ title: string; subtitle: string; icon: string; color: string; onClick: () => void }> = [
 			{ title: '学习路径', subtitle: 'AI 生成完整学习计划', icon: 'route', color: 'tile-purple', onClick: () => this.openCreatePathModal() },
-			{ title: '卡片背诵', subtitle: 'Flash Card 内容背诵', icon: 'layers', color: 'tile-teal', onClick: () => { this.learningState = 'flashcard-deck-list'; this.render(); } },
+			{ title: '卡片背诵', subtitle: 'Flash Card 内容背诵', icon: 'layers', color: 'tile-teal', onClick: () => { this.learningState = 'flashcard-daily-hub'; this.render(); } },
 			{ title: '小试牛刀', subtitle: 'Quiz 知识测验', icon: 'help-circle', color: 'tile-orange', onClick: () => { this.learningState = 'quiz-hub'; this.render(); } },
 		];
 
@@ -3786,6 +3795,214 @@ private async renderQuizResultsListPage(container: HTMLElement): Promise<void> {
 	// ==================== 闪卡功能 ====================
 
 	/**
+	 * 渲染每日学习入口页面
+	 */
+	private async renderFlashcardDailyHub(container: HTMLElement): Promise<void> {
+		container.empty();
+		container.addClass('flashcard-daily-hub');
+
+		// 添加头部
+		const header = container.createDiv({ cls: 'learning-page-header' });
+		const titleRow = header.createDiv({ cls: 'header-title-row' });
+
+		// 返回按钮
+		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
+		setIcon(backBtn, 'arrow-left');
+		backBtn.addEventListener('click', () => {
+			this.learningState = 'hub';
+			this.render();
+		});
+
+		// 标题
+		titleRow.createEl('h2', { text: '闪卡学习', cls: 'page-title' });
+
+		// 占位按钮（保持标题居中，与批量管理按钮同宽）
+		const placeholderBtn = titleRow.createEl('button', {
+			cls: 'quiz-manage-btn',
+			attr: { style: 'visibility: hidden; pointer-events: none;' }
+		});
+		placeholderBtn.textContent = '批量管理';
+
+		// 副标题
+		header.createEl('p', { text: '每日学习一点,慢慢形成复利', cls: 'page-subtitle' });
+
+		// 主内容区域
+		const main = container.createDiv({ cls: 'daily-hub-main' });
+
+		// 加载所有卡组数据
+		const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+		let allDecks: FlashcardDeck[] = [];
+		try {
+			allDecks = await storage.loadAllDecks();
+		} catch (error) {
+			console.error('加载卡组失败:', error);
+			new Notice('加载卡组数据失败');
+			return;
+		}
+
+		// 统计所有卡组的今日待学卡片
+		let totalNew = 0;
+		let totalReview = 0;
+		const deckStats: Array<{
+			deck: FlashcardDeck;
+			newCount: number;
+			reviewCount: number;
+		}> = [];
+
+		for (const deck of allDecks) {
+			try {
+				const cards = await storage.getCardsToStudy(
+					deck.id,
+					deck.settings.newCardsPerDay,
+					deck.settings.reviewCardsPerDay
+				);
+
+				const newCards = cards.filter(c => c.learning.status === 'new');
+				const reviewCards = cards.filter(c => c.learning.status !== 'new');
+
+				totalNew += newCards.length;
+				totalReview += reviewCards.length;
+
+				// 只记录有待学卡片的卡组
+				if (newCards.length > 0 || reviewCards.length > 0) {
+					deckStats.push({
+						deck,
+						newCount: newCards.length,
+						reviewCount: reviewCards.length
+					});
+				}
+			} catch (error) {
+				console.error(`加载卡组 ${deck.id} 的待学卡片失败:`, error);
+			}
+		}
+
+		const totalCards = totalNew + totalReview;
+
+		// 核心统计卡片
+		const statsCard = main.createDiv({ cls: 'daily-stats-card' });
+		statsCard.createEl('h2', { text: '今天你有', cls: 'stats-title' });
+
+		// 核心数字
+		const numberSection = statsCard.createDiv({ cls: 'stats-number-section' });
+		numberSection.createEl('span', { text: totalCards.toString(), cls: 'stats-number' });
+		numberSection.createEl('span', { text: '张卡片', cls: 'stats-unit' });
+
+		statsCard.createEl('p', { text: '由 FSRS 算法为你精选', cls: 'stats-subtitle' });
+
+		// 任务分解
+		const taskGrid = statsCard.createDiv({ cls: 'task-breakdown-grid' });
+
+		const newCardBox = taskGrid.createDiv({ cls: 'task-box task-box-new' });
+		newCardBox.createEl('p', { text: '新卡片', cls: 'task-label' });
+		const newCardCount = newCardBox.createEl('p', { cls: 'task-count' });
+		newCardCount.createEl('span', { text: totalNew.toString(), cls: 'task-number' });
+		newCardCount.createEl('span', { text: ' 张', cls: 'task-unit' });
+
+		const reviewCardBox = taskGrid.createDiv({ cls: 'task-box task-box-review' });
+		reviewCardBox.createEl('p', { text: '待复习', cls: 'task-label' });
+		const reviewCardCount = reviewCardBox.createEl('p', { cls: 'task-count' });
+		reviewCardCount.createEl('span', { text: totalReview.toString(), cls: 'task-number' });
+		reviewCardCount.createEl('span', { text: ' 张', cls: 'task-unit' });
+
+		// 主要行动按钮
+		const ctaSection = main.createDiv({ cls: 'daily-cta-section' });
+		const startBtn = ctaSection.createEl('button', {
+			cls: 'daily-start-btn',
+			text: `开始学习 (${totalCards})`
+		});
+		startBtn.addEventListener('click', () => {
+			if (totalCards === 0) {
+				new Notice('今天没有需要学习的卡片！');
+				return;
+			}
+			this.pushNavContext();  // 推入当前状态到导航栈
+			this.startMixedStudying();
+		});
+
+		ctaSection.createEl('p', {
+			text: '将混合学习新卡片和复习卡片',
+			cls: 'cta-subtitle'
+		});
+
+		// 我的卡组区域
+		const deckSection = main.createDiv({ cls: 'daily-deck-section' });
+
+		// 区域标题
+		const deckHeader = deckSection.createDiv({ cls: 'deck-section-header' });
+		deckHeader.createEl('h3', { text: '我的卡组', cls: 'section-title' });
+
+		const manageLink = deckHeader.createEl('a', {
+			text: '查看全部 (管理)',
+			cls: 'manage-link'
+		});
+		manageLink.addEventListener('click', (e) => {
+			e.preventDefault();
+			this.pushNavContext();  // 推入当前状态到导航栈
+			this.learningState = 'flashcard-deck-list';
+			this.render();
+		});
+
+		// 卡组列表
+		const deckList = deckSection.createDiv({ cls: 'daily-deck-list' });
+
+		// 创建新卡组按钮
+		const createDeckBtn = deckList.createDiv({ cls: 'create-deck-card' });
+		const createIconWrapper = createDeckBtn.createDiv({ cls: 'create-icon-wrapper' });
+		setIcon(createIconWrapper, 'plus');
+		createDeckBtn.createEl('p', { text: '创建新卡组', cls: 'create-title' });
+		createDeckBtn.createEl('p', { text: '从笔记生成学习卡片', cls: 'create-subtitle' });
+		createDeckBtn.addEventListener('click', () => {
+			const modal = new CreateDeckModal(this.app, this.plugin, async () => {
+				await this.render();
+			});
+			modal.open();
+		});
+
+		// 显示有待学卡片的卡组（最多显示5个）
+		const displayDecks = deckStats.slice(0, 5);
+		for (const { deck, newCount, reviewCount } of displayDecks) {
+			const deckItem = deckList.createDiv({ cls: 'daily-deck-item' });
+
+			// 颜色条
+			const colorBar = deckItem.createDiv({ cls: `deck-color-bar deck-color-${this.getTileColorClass(deck.id)}` });
+
+			// 卡组信息
+			const deckInfo = deckItem.createDiv({ cls: 'deck-info' });
+			deckInfo.createEl('h4', { text: deck.name, cls: 'deck-name' });
+			const dateStr = new Date(deck.updatedAt || deck.createdAt).toLocaleDateString('zh-CN');
+			deckInfo.createEl('p', { text: dateStr, cls: 'deck-date' });
+
+			// 卡组统计
+			const deckStats = deckItem.createDiv({ cls: 'deck-stats' });
+			const totalDeckCards = newCount + reviewCount;
+			const countText = deckStats.createEl('p', { cls: 'deck-total' });
+			countText.createEl('span', { text: totalDeckCards.toString(), cls: 'deck-number' });
+			countText.createEl('span', { text: ' 张', cls: 'deck-unit' });
+
+			const masteryRate = deck.stats.masteryRate || 0;
+			deckStats.createEl('p', {
+				text: `${Math.round(masteryRate * 100)}% 掌握`,
+				cls: 'deck-mastery'
+			});
+
+			// 点击进入单卡组学习
+			deckItem.addEventListener('click', () => {
+				this.pushNavContext();  // 推入当前状态到导航栈
+				this.startStudying(deck.id);
+			});
+		}
+
+		// 如果没有待学卡片的卡组
+		if (displayDecks.length === 0) {
+			const emptyMsg = deckList.createDiv({ cls: 'empty-message' });
+			emptyMsg.createEl('p', {
+				text: '🎉 太棒了！今天没有需要学习的卡片',
+				cls: 'empty-text'
+			});
+		}
+	}
+
+	/**
 	 * 渲染闪卡列表页
 	 */
 private async renderFlashcardDeckList(container: HTMLElement): Promise<void> {
@@ -3799,9 +4016,9 @@ private async renderFlashcardDeckList(container: HTMLElement): Promise<void> {
 		const backBtn = titleRow.createEl('button', { cls: 'back-btn-inline' });
 		setIcon(backBtn, 'arrow-left');
 		backBtn.addEventListener('click', () => {
-			this.goBackOr(() => { this.learningState = 'hub'; this.render(); });
+			this.goBackOr(() => { this.learningState = 'flashcard-daily-hub'; this.render(); });
 		});
-		titleRow.createEl('h2', { text: '闪卡背诵', cls: 'page-title' });
+		titleRow.createEl('h2', { text: '闪卡列表', cls: 'page-title' });
 
 		// 批量管理切换按钮（与 Quiz 列表一致）
 		const manageBtn = titleRow.createEl('button', {
@@ -3996,6 +4213,7 @@ private async renderFlashcardDeckList(container: HTMLElement): Promise<void> {
         const studyBtn = actions.createEl('button', { text: '学习', cls: 'deck-btn primary' });
         studyBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
+            this.pushNavContext();  // 推入当前状态到导航栈
             await this.startStudying(deck.id);
         });
 
@@ -4030,6 +4248,99 @@ private async renderFlashcardDeckList(container: HTMLElement): Promise<void> {
     /**
      * 开始学习卡组
      */
+	/**
+	 * 开始混合学习（混合所有卡组的待学卡片）
+	 */
+	private async startMixedStudying(): Promise<void> {
+		try {
+			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
+			const allDecks = await storage.loadAllDecks();
+
+			if (allDecks.length === 0) {
+				new Notice('没有可用的卡组');
+				return;
+			}
+
+			// 从所有卡组收集待学卡片
+			const allReviewCards: Array<Flashcard & { _deckId: string }> = [];
+			const allNewCards: Array<Flashcard & { _deckId: string }> = [];
+
+			for (const deck of allDecks) {
+				try {
+					const cards = await storage.getCardsToStudy(
+						deck.id,
+						deck.settings.newCardsPerDay,
+						deck.settings.reviewCardsPerDay
+					);
+
+					// 给每张卡片打上所属卡组的标记
+					for (const card of cards) {
+						const taggedCard = { ...card, _deckId: deck.id };
+						if (card.learning.status === 'new') {
+							allNewCards.push(taggedCard);
+						} else {
+							allReviewCards.push(taggedCard);
+						}
+					}
+				} catch (error) {
+					console.error(`加载卡组 ${deck.id} 的待学卡片失败:`, error);
+				}
+			}
+
+			// 按策略排序：先复习后新卡
+			// 复习卡片按 nextReview 升序（最早到期的先学）
+			allReviewCards.sort((a, b) => a.learning.nextReview - b.learning.nextReview);
+
+			// 合并：先复习卡片，后新卡片
+			const studyCards = [...allReviewCards, ...allNewCards];
+
+			if (studyCards.length === 0) {
+				new Notice('🎉 今天没有需要学习的卡片了！');
+				return;
+			}
+
+			// 创建虚拟卡组用于显示
+			const now = Date.now();
+			this.currentDeck = {
+				id: 'daily-mixed',
+				name: '今日混合学习',
+				sourceNotes: [],
+				cardIds: studyCards.map(c => c.id),
+				createdAt: now,
+				updatedAt: now,
+				settings: {
+					newCardsPerDay: 20,
+					reviewCardsPerDay: 200
+				},
+				stats: {
+					total: studyCards.length,
+					new: allNewCards.length,
+					learning: 0,
+					review: allReviewCards.length,
+					mastered: 0,
+					masteryRate: 0,
+					totalStudyTime: 0,
+					totalReviews: 0
+				}
+			};
+
+			// 设置学习状态
+			this.currentCards = studyCards;
+			this.currentCardIndex = 0;
+			this.studyStartTime = Date.now();
+			this.isMixedStudy = true;  // 标记为混合学习
+			this.studyResults = [];     // 清空学习结果
+
+			// 切换到学习视图
+			this.learningState = 'flashcard-study';
+			this.render();
+
+		} catch (error) {
+			console.error('开始混合学习失败:', error);
+			new Notice(`开始混合学习失败: ${error.message}`);
+		}
+	}
+
 	private async startStudying(deckId: string): Promise<void> {
 		try {
 			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
@@ -4059,6 +4370,8 @@ private async renderFlashcardDeckList(container: HTMLElement): Promise<void> {
 			this.currentCards = studyCards;
 			this.currentCardIndex = 0;
 			this.studyStartTime = Date.now();
+			this.isMixedStudy = false;  // 单卡组学习
+			this.studyResults = [];      // 清空学习结果
 
 			// 切换到学习视图
 			this.learningState = 'flashcard-study';
@@ -4819,7 +5132,8 @@ private renderFlashcardStudy(container: HTMLElement): void {
 
 		if (isLastCard) {
 			new Notice('🎉 今天的学习任务完成了！');
-			this.learningState = 'flashcard-deck-list';
+			// 跳转到学习总结页面
+			this.learningState = 'flashcard-study-summary';
 			this.render();
 		} else {
 			// 移动到下一张
@@ -4929,7 +5243,24 @@ private renderFlashcardStudy(container: HTMLElement): void {
 			const storage = new FlashcardStorage(this.app, this.plugin.settings.flashcard?.deckDir || 'flashcards');
 			const timeTaken = Date.now() - this.studyStartTime;
 
-			await storage.updateCardLearningState(this.currentDeck.id, cardId, rating, timeTaken);
+			// 获取当前卡片以确定所属卡组
+			const currentCard = this.currentCards[this.currentCardIndex] as any;
+			let deckId = this.currentDeck.id;
+
+			// 如果是混合学习，需要使用卡片的真实卡组ID
+			if (this.isMixedStudy && currentCard._deckId) {
+				deckId = currentCard._deckId;
+			}
+
+			await storage.updateCardLearningState(deckId, cardId, rating, timeTaken);
+
+			// 记录学习结果用于总结页面
+			this.studyResults.push({
+				cardId,
+				rating,
+				timeTaken,
+				deckId
+			});
 
 			// 重置计时
 			this.studyStartTime = Date.now();
@@ -4938,6 +5269,120 @@ private renderFlashcardStudy(container: HTMLElement): void {
 			console.error('更新卡片状态失败:', error);
 			new Notice(`更新失败: ${error.message}`);
 		}
+	}
+
+	/**
+	 * 渲染学习总结页面
+	 */
+	private renderFlashcardStudySummary(container: HTMLElement): void {
+		container.empty();
+		container.addClass('flashcard-study-summary');
+
+		// 主内容
+		const main = container.createDiv({ cls: 'summary-main' });
+
+		// 计算统计数据
+		const totalStudied = this.studyResults.length;
+		const studyDuration = Math.round((Date.now() - this.studyStartTime) / 1000);
+		const avgTime = totalStudied > 0 ? Math.round(studyDuration / totalStudied) : 0;
+
+		// 评分统计
+		const againCount = this.studyResults.filter(r => r.rating === 0).length;
+		const hardCount = this.studyResults.filter(r => r.rating === 1).length;
+		const goodCount = this.studyResults.filter(r => r.rating === 2).length;
+		const easyCount = this.studyResults.filter(r => r.rating === 3).length;
+
+		// 恭喜标题
+		const congrats = main.createDiv({ cls: 'summary-congrats' });
+		congrats.createEl('div', { text: '🎉', cls: 'congrats-emoji' });
+		congrats.createEl('h2', { text: '恭喜完成今日学习！', cls: 'congrats-title' });
+
+		// 核心数据卡片
+		const statsGrid = main.createDiv({ cls: 'summary-stats-grid' });
+
+		// 学习卡片数
+		const cardsCard = statsGrid.createDiv({ cls: 'summary-stat-card' });
+		cardsCard.createEl('p', { text: '学习卡片', cls: 'stat-label' });
+		const cardsValue = cardsCard.createEl('p', { cls: 'stat-value' });
+		cardsValue.createEl('span', { text: totalStudied.toString(), cls: 'stat-number' });
+		cardsValue.createEl('span', { text: ' 张', cls: 'stat-unit' });
+
+		// 学习用时
+		const timeCard = statsGrid.createDiv({ cls: 'summary-stat-card' });
+		timeCard.createEl('p', { text: '学习用时', cls: 'stat-label' });
+		const minutes = Math.floor(studyDuration / 60);
+		const seconds = studyDuration % 60;
+		const timeValue = timeCard.createEl('p', { cls: 'stat-value' });
+		if (minutes > 0) {
+			timeValue.createEl('span', { text: `${minutes}`, cls: 'stat-number' });
+			timeValue.createEl('span', { text: ' 分 ', cls: 'stat-unit' });
+		}
+		timeValue.createEl('span', { text: `${seconds}`, cls: 'stat-number' });
+		timeValue.createEl('span', { text: ' 秒', cls: 'stat-unit' });
+
+		// 平均用时
+		const avgCard = statsGrid.createDiv({ cls: 'summary-stat-card' });
+		avgCard.createEl('p', { text: '平均用时', cls: 'stat-label' });
+		const avgValue = avgCard.createEl('p', { cls: 'stat-value' });
+		avgValue.createEl('span', { text: avgTime.toString(), cls: 'stat-number' });
+		avgValue.createEl('span', { text: ' 秒/张', cls: 'stat-unit' });
+
+		// 评分分布
+		if (totalStudied > 0) {
+			const ratingSection = main.createDiv({ cls: 'summary-rating-section' });
+			ratingSection.createEl('h3', { text: '评分分布', cls: 'section-title' });
+
+			const ratingBars = ratingSection.createDiv({ cls: 'rating-bars' });
+
+			const ratings = [
+				{ label: '忘记', count: againCount, color: '#ff4757' },
+				{ label: '困难', count: hardCount, color: '#ffa502' },
+				{ label: '熟悉', count: goodCount, color: '#1e90ff' },
+				{ label: '简单', count: easyCount, color: '#2ed573' }
+			];
+
+			ratings.forEach(r => {
+				const barItem = ratingBars.createDiv({ cls: 'rating-bar-item' });
+				barItem.createEl('span', { text: r.label, cls: 'rating-label' });
+
+				const barContainer = barItem.createDiv({ cls: 'rating-bar-container' });
+				const percentage = (r.count / totalStudied) * 100;
+				const bar = barContainer.createDiv({
+					cls: 'rating-bar',
+					attr: { style: `width: ${percentage}%; background-color: ${r.color}` }
+				});
+
+				barItem.createEl('span', { text: r.count.toString(), cls: 'rating-count' });
+			});
+		}
+
+		// 操作按钮
+		const actions = main.createDiv({ cls: 'summary-actions' });
+
+		const returnBtn = actions.createEl('button', {
+			cls: 'summary-btn summary-btn-primary',
+			text: '返回'
+		});
+		returnBtn.addEventListener('click', () => {
+			// 使用导航栈返回，如果没有则根据学习模式判断
+			this.goBackOr(() => {
+				if (this.isMixedStudy) {
+					this.learningState = 'flashcard-daily-hub';
+				} else {
+					this.learningState = 'flashcard-deck-list';
+				}
+				this.render();
+			});
+		});
+
+		const homeBtn = actions.createEl('button', {
+			cls: 'summary-btn summary-btn-secondary',
+			text: '返回学习中心'
+		});
+		homeBtn.addEventListener('click', () => {
+			this.learningState = 'hub';
+			this.render();
+		});
 	}
 
 	/**

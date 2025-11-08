@@ -6875,3 +6875,505 @@ button.mod-cta:hover {
         max-height: 400px;
     }
 }
+
+/* ==================== 闪卡每日学习入口 ==================== */
+
+.flashcard-daily-hub {
+    /* 不设置 padding，使用 .learning-page 的 padding: 20px */
+}
+
+.daily-hub-main {
+    /* 不设置额外的 padding，避免与 .learning-page 的 padding 重复 */
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* 核心统计卡片 */
+.daily-stats-card {
+    background: var(--background-primary);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+}
+
+.daily-stats-card .stats-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-normal);
+    margin-bottom: 8px;
+}
+
+.daily-stats-card .stats-number-section {
+    margin: 10px 0 8px;
+}
+
+.daily-stats-card .stats-number {
+    font-size: 4rem;
+    font-weight: 700;
+    color: var(--interactive-accent);
+    line-height: 1;
+}
+
+.daily-stats-card .stats-unit {
+    font-size: 1.15rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-left: 4px;
+}
+
+.daily-stats-card .stats-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    margin-bottom: 0;
+}
+
+/* 任务分解网格 */
+.task-breakdown-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.task-box {
+    background: var(--background-secondary);
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: left;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.task-box-new {
+    background: rgba(33, 150, 243, 0.05);
+    border-color: rgba(33, 150, 243, 0.2);
+}
+
+.task-box-review {
+    background: rgba(255, 165, 2, 0.05);
+    border-color: rgba(255, 165, 2, 0.2);
+}
+
+.task-box .task-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.task-box .task-count {
+    margin: 0;
+}
+
+.task-box .task-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-normal);
+}
+
+.task-box .task-unit {
+    font-size: 0.95rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+/* 主要行动按钮区域 */
+.daily-cta-section {
+    margin: 24px 0;
+    text-align: center;
+}
+
+.daily-start-btn {
+    width: 100%;
+    padding: 20px 32px;
+    min-height: 64px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #ffffff !important;
+    background: #2196F3 !important;
+    background-color: #2196F3 !important;
+    border: none !important;
+    border-radius: 16px;
+    cursor: pointer;
+    box-shadow: none;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.daily-start-btn:hover {
+    background: #2196F3 !important;
+    background-color: #2196F3 !important;
+    box-shadow: 0 8px 20px rgba(33, 150, 243, 0.35);
+    transform: translateY(-2px);
+}
+
+.daily-start-btn:active {
+    transform: scale(0.98) translateY(0);
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.25);
+}
+
+.daily-cta-section .cta-subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+/* 我的卡组区域 */
+.daily-deck-section {
+    margin-top: 32px;
+}
+
+.deck-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.deck-section-header .section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-normal);
+    margin: 0;
+}
+
+.deck-section-header .manage-link {
+    font-size: 0.875rem;
+    color: var(--interactive-accent);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.deck-section-header .manage-link:hover {
+    text-decoration: underline;
+}
+
+/* 卡组列表 */
+.daily-deck-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* 创建新卡组卡片 */
+.create-deck-card {
+    background: var(--background-primary);
+    border: 2px dashed var(--background-modifier-border);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.create-deck-card:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+}
+
+.create-deck-card .create-icon-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: var(--background-secondary);
+    border-radius: 50%;
+    margin-bottom: 8px;
+}
+
+.create-deck-card .create-icon-wrapper svg {
+    width: 24px;
+    height: 24px;
+    color: var(--text-muted);
+}
+
+.create-deck-card .create-title {
+    font-weight: 600;
+    color: var(--text-normal);
+    margin: 8px 0 4px;
+}
+
+.create-deck-card .create-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* 卡组列表项 */
+.daily-deck-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.daily-deck-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.daily-deck-item:active {
+    transform: scale(0.98);
+}
+
+/* 颜色条 */
+.deck-color-bar {
+    width: 6px;
+    height: 40px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.deck-color-bar.deck-color-tile-blue { background-color: #3b82f6; }
+.deck-color-bar.deck-color-tile-green { background-color: #10b981; }
+.deck-color-bar.deck-color-tile-orange { background-color: #f97316; }
+.deck-color-bar.deck-color-tile-purple { background-color: #8b5cf6; }
+.deck-color-bar.deck-color-tile-pink { background-color: #ec4899; }
+.deck-color-bar.deck-color-tile-teal { background-color: #14b8a6; }
+
+/* 卡组信息 */
+.daily-deck-item .deck-info {
+    flex-grow: 1;
+}
+
+.daily-deck-item .deck-name {
+    font-weight: 600;
+    color: var(--text-normal);
+    margin: 0 0 4px 0;
+}
+
+.daily-deck-item .deck-date {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* 卡组统计 */
+.daily-deck-item .deck-stats {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.daily-deck-item .deck-total {
+    font-weight: 700;
+    color: var(--text-normal);
+    margin: 0 0 4px 0;
+}
+
+.daily-deck-item .deck-number {
+    font-size: 1.125rem;
+}
+
+.daily-deck-item .deck-unit {
+    font-size: 0.875rem;
+    font-weight: 400;
+}
+
+.daily-deck-item .deck-mastery {
+    font-size: 0.875rem;
+    color: #10b981;
+    margin: 0;
+}
+
+/* 空状态消息 */
+.daily-deck-list .empty-message {
+    padding: 32px;
+    text-align: center;
+}
+
+.daily-deck-list .empty-text {
+    font-size: 1.125rem;
+    color: var(--text-muted);
+}
+
+/* ==================== 学习总结页面 ==================== */
+
+.flashcard-study-summary {
+    /* 不设置 padding，使用 .learning-page 的 padding: 20px */
+}
+
+.summary-main {
+    max-width: 700px;
+    margin: 0 auto;
+    padding-top: 20px;  /* 顶部添加一些空间 */
+}
+
+/* 恭喜区域 */
+.summary-congrats {
+    text-align: center;
+    padding: 32px 0;
+}
+
+.summary-congrats .congrats-emoji {
+    font-size: 4rem;
+    margin-bottom: 16px;
+}
+
+.summary-congrats .congrats-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-normal);
+    margin: 0;
+}
+
+/* 统计卡片网格 */
+.summary-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 24px 0;
+}
+
+.summary-stat-card {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+
+.summary-stat-card .stat-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin: 0 0 12px 0;
+}
+
+.summary-stat-card .stat-value {
+    margin: 0;
+}
+
+.summary-stat-card .stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--interactive-accent);
+}
+
+.summary-stat-card .stat-unit {
+    font-size: 1rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* 评分分布区域 */
+.summary-rating-section {
+    margin: 32px 0;
+}
+
+.summary-rating-section .section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-normal);
+    margin: 0 0 16px 0;
+}
+
+.rating-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.rating-bar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.rating-bar-item .rating-label {
+    width: 60px;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.rating-bar-container {
+    flex-grow: 1;
+    height: 24px;
+    background: var(--background-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.rating-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.rating-bar-item .rating-count {
+    width: 40px;
+    text-align: right;
+    font-weight: 600;
+    color: var(--text-normal);
+    flex-shrink: 0;
+}
+
+/* 操作按钮 */
+.summary-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 32px;
+}
+
+.summary-btn {
+    flex: 1;
+    padding: 14px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.summary-btn-primary {
+    background: var(--interactive-accent);
+    color: white;
+}
+
+.summary-btn-primary:hover {
+    background: var(--interactive-accent-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.summary-btn-secondary {
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+}
+
+.summary-btn-secondary:hover {
+    background: var(--background-modifier-hover);
+}
+
+.summary-btn:active {
+    transform: scale(0.98);
+}
+
+/* 响应式设计 */
+@media (max-width: 600px) {
+    .task-breakdown-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .summary-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .daily-stats-card .stats-number {
+        font-size: 3.5rem;
+    }
+
+    .summary-actions {
+        flex-direction: column;
+    }
+}
